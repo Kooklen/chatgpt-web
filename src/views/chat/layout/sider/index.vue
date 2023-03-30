@@ -13,8 +13,6 @@ const chatStore = useChatStore()
 
 const { isMobile } = useBasicLayout()
 const show = ref(false)
-const showQrCode = ref(false)
-
 const collapsed = computed(() => appStore.siderCollapsed)
 
 function handleAdd() {
@@ -88,7 +86,7 @@ watch(
               </NButton>
             </template>
             <div>
-              <img src="./public/wxpay.png" style="width: 200px;height: 200px;">
+              <img src="https://i.328888.xyz/2023/03/30/i0pdaF.png" style="width: 200px;height: 220px;">
             </div>
           </NPopover>
         </div>
