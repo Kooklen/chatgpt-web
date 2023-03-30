@@ -1,7 +1,7 @@
 <script setup lang='ts'>
 import type { CSSProperties } from 'vue'
 import { computed, ref, watch } from 'vue'
-import { NButton, NLayoutSider } from 'naive-ui'
+import { NButton, NLayoutSider, NPopover } from 'naive-ui'
 import List from './List.vue'
 import Footer from './Footer.vue'
 import { useAppStore, useChatStore } from '@/store'
@@ -13,6 +13,7 @@ const chatStore = useChatStore()
 
 const { isMobile } = useBasicLayout()
 const show = ref(false)
+const showQrCode = ref(false)
 
 const collapsed = computed(() => appStore.siderCollapsed)
 
@@ -78,6 +79,18 @@ watch(
         </div>
         <div class="flex-1 min-h-0 pb-4 overflow-hidden">
           <List />
+        </div>
+        <div class="p-4 pb-0">
+          <NPopover trigger="click" :delay="1500" :duration="1500">
+            <template #trigger>
+              <NButton type="primary" block>
+                {{ $t('store.supportMe') }}
+              </NButton>
+            </template>
+            <div>
+              <img src="./public/wxpay.png" style="width: 200px;height: 200px;">
+            </div>
+          </NPopover>
         </div>
         <div class="p-4">
           <NButton block @click="show = true">
