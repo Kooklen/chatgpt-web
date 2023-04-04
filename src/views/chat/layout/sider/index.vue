@@ -1,7 +1,7 @@
 <script setup lang='ts'>
 import type { CSSProperties } from 'vue'
-import { computed, ref, watch } from 'vue'
-import { NButton, NLayoutSider, NPopover } from 'naive-ui'
+import { computed, h, ref, watch } from 'vue'
+import { NButton, NLayoutSider, NPopover, useNotification } from 'naive-ui'
 import List from './List.vue'
 import Footer from './Footer.vue'
 import { useAppStore, useChatStore } from '@/store'
@@ -10,7 +10,7 @@ import { PromptStore } from '@/components/common'
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
-
+const notification = useNotification()
 const { isMobile } = useBasicLayout()
 const show = ref(false)
 const collapsed = computed(() => appStore.siderCollapsed)
@@ -43,6 +43,37 @@ const mobileSafeArea = computed(() => {
   }
   return {}
 })
+
+const handleNotification = () => {
+  let markAsRead = false
+  const n = notification.create({
+    title: '通知',
+    content: '市面上的大部分服务商使用各种灰色/黑色方式从官方白嫖，已经不可用，本服务依然保持稳定运行。',
+    meta: '2023-4-4 12:00',
+    action: () =>
+      h(
+        NButton,
+        {
+          text: true,
+          type: 'primary',
+          onClick: () => {
+            markAsRead = true
+            n.destroy()
+          },
+        },
+        {
+          default: () => '已读',
+        },
+      ),
+    onClose: () => {
+      if (!markAsRead) {
+        markAsRead = true
+        n.destroy()
+      }
+    },
+  })
+}
+handleNotification()
 
 watch(
   isMobile,
