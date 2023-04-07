@@ -22,7 +22,7 @@ const userInfo = computed(() => userStore.userInfo)
 
 const avatar = ref(userInfo.value.avatar ?? '')
 
-const name = ref(userInfo.value.name ?? 'OpenAI')
+// const name = ref(userInfo.value.name ?? 'OpenAI')
 
 const description = ref(userInfo.value.description ?? '')
 
