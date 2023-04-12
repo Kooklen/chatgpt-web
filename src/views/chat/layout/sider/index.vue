@@ -48,8 +48,8 @@ const handleNotification = () => {
   let markAsRead = false
   const n = notification.create({
     title: '通知',
-    content: '市面上的大部分服务商使用各种灰色/黑色方式从官方白嫖，已经不可用，本服务依然保持稳定运行。',
-    meta: '2023-4-4 12:00',
+    content: '为爱发不起电了，继续使用服务需要付费的联系开发者kooklen_xh',
+    meta: '2023-4-12 12:00',
     action: () =>
       h(
         NButton,
