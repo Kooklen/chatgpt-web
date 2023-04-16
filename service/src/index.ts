@@ -5,6 +5,7 @@ import { chatConfig, chatReplyProcess, currentModel } from './chatgpt'
 import { auth } from './middleware/auth'
 import { limiter } from './middleware/limiter'
 import { isNotEmptyString } from './utils/is'
+const connection = require('../src/models/database')
 
 const app = express()
 const router = express.Router()
@@ -25,6 +26,13 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   try {
     const { prompt, options = {}, systemMessage } = req.body as RequestProps
     let firstChunk = true
+
+    // // 执行SQL查询
+    // const results = await connection.promise().query('SELECT * FROM users')
+		//
+    // // 处理查询结果
+    // console.log('Query results: ', results[0])
+
     await chatReplyProcess({
       message: prompt,
       lastContext: options,

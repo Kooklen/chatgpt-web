@@ -3,11 +3,24 @@ import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { setupPageGuard } from './permission'
 import { ChatLayout } from '@/views/chat/layout'
-
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    name: 'Root',
+    redirect: '/login',
+    children: [
+      {
+        path: '/login',
+        component: () => import('@/views/login/Login.vue'),
+      },
+    ],
+  },
+  {
+    path: '/signup',
+    name: 'signup',
+    component: () => import('@/views/login/Signup.vue'),
+  },
+  {
+    path: '/chat',
     component: ChatLayout,
     redirect: '/chat',
     children: [
@@ -15,8 +28,7 @@ const routes: RouteRecordRaw[] = [
         path: '/chat/:uuid?',
         name: 'Chat',
         component: () => import('@/views/chat/index.vue'),
-      },
-    ],
+      }],
   },
 
   {
@@ -30,7 +42,6 @@ const routes: RouteRecordRaw[] = [
     name: '500',
     component: () => import('@/views/exception/500/index.vue'),
   },
-
   {
     path: '/:pathMatch(.*)*',
     name: 'notFound',
