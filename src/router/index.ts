@@ -15,11 +15,6 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    path: '/signup',
-    name: 'signup',
-    component: () => import('@/views/login/Signup.vue'),
-  },
-  {
     path: '/chat',
     component: ChatLayout,
     redirect: '/chat',

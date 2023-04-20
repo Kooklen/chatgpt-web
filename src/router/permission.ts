@@ -4,7 +4,12 @@ import { useAuthStoreWithout } from '@/store/modules/auth'
 export function setupPageGuard(router: Router) {
   router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStoreWithout()
-    if (!authStore.session) {
+
+    // 需要鉴权的页面路径
+    const authPaths = ['/chat']
+
+    // 判断是否需要鉴权
+    if (authPaths.includes(to.path) && !authStore.session) {
       try {
         const data = await authStore.getSession()
         if (String(data.auth) === 'false' && authStore.token)

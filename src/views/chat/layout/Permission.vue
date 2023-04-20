@@ -16,12 +16,12 @@ const authStore = useAuthStore()
 const ms = useMessage()
 
 const loading = ref(false)
-const token = ref('')
+const token = ref(localStorage.getItem('token'))
 
-const disabled = computed(() => !token.value.trim() || loading.value)
+// const disabled = computed(() => !token.value.trim() || loading.value)
 
 async function handleVerify() {
-  const secretKey = token.value.trim()
+  const secretKey = token.value?.trim()
 
   if (!secretKey)
     return

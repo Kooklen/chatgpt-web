@@ -1,28 +1,14 @@
 import express from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import Redis from 'ioredis'
 import type { RequestProps } from './types'
 import type { ChatMessage } from './chatgpt'
 import { chatConfig, chatReplyProcess, currentModel } from './chatgpt'
 import { auth } from './middleware/auth'
 import { limiter } from './middleware/limiter'
 import { isNotEmptyString } from './utils/is'
-// const redis = require('redis')
+import { client } from './redis'
 const { executeQuery } = require('./models/database')
-const client = new Redis({
-  host: 'localhost', // Redis server address
-  port: 6379, // Redis server port number
-  // password: 'your_redis_password', // Redis server password
-})
-
-client.on('connect', () => {
-  console.log('Redis client connected')
-})
-
-client.on('error', (err) => {
-  console.error('Redis client error:', err)
-})
 
 const app = express()
 const router = express.Router()
@@ -39,7 +25,6 @@ app.all('*', (_, res, next) => {
 
 const privateKey = 'your_private_key_here'
 
-// 注册接口
 router.post('/register', async (req, res) => {
   try {
     const { email, password, invitationCode } = req.body
@@ -47,7 +32,7 @@ router.post('/register', async (req, res) => {
     if (!email || !password)
       throw new Error('Invalid email or password')
 
-    // Check invitation code first
+    // 如果有邀请码，则检查邀请码是否合法
     if (invitationCode) {
       const [invitation] = await executeQuery(
         'SELECT * FROM invitation_codes WHERE code = ?',
@@ -55,9 +40,6 @@ router.post('/register', async (req, res) => {
       )
       if (!invitation)
         throw new Error('Invalid invitation code')
-    }
-    else {
-      throw new Error('Invitation code is required')
     }
 
     // 检查数据库中是否已经存在该用户
@@ -68,6 +50,36 @@ router.post('/register', async (req, res) => {
     if (user)
       throw new Error('User already exists')
 
+    // 使用 bcrypt 对密码进行加密
+    const saltRounds = 10
+    const hash = await bcrypt.hash(password, saltRounds)
+    // 将加密后的密码和 email 存入数据库，并且将当前时间作为创建时间
+    const created_at = new Date()
+    const result = await executeQuery(
+      'INSERT INTO users (email, password, created_at) VALUES (?, ?, ?)',
+      [email, hash, created_at],
+    )
+
+    // 如果有邀请码，则将邀请码存储到用户表中
+    if (invitationCode) {
+      // 将邀请码存储到用户表中
+      await executeQuery(
+        'UPDATE users SET invitation_code = ? WHERE email = ?',
+        [invitationCode, email],
+      )
+    }
+
+    // 返回 token
+    const token = jwt.sign({ email }, privateKey, { algorithm: 'HS256' })
+
+    await client.set(token, email, (err, reply) => {
+      if (err)
+        throw new Error(err)
+    })
+    res.cookie('token', token, { maxAge: 3600 * 1000 })
+
+    res.send({ status: 'success', token })
+
     // ... (rest of the code)
   }
   catch (error) {
@@ -75,10 +87,56 @@ router.post('/register', async (req, res) => {
   }
 })
 
+// router.post('/login', async (req, res) => {
+//   try {
+//     const { email, password } = req.body
+//     // 验证 email 和 password 是否合法
+//     if (!email || !password)
+//       throw new Error('Invalid email or password')
+//
+//     // 检查数据库中是否存在该用户
+//     const [user] = await executeQuery(
+//       'SELECT * FROM users WHERE email = ?',
+//       [email],
+//     )
+//     if (!user)
+//       throw new Error('User not found')
+//
+//     // 使用 bcrypt 验证密码是否匹配
+//     const match = await bcrypt.compare(password, user.password)
+//     if (!match)
+//       throw new Error('Invalid password')
+//
+//     // 检查 Redis 中是否存在该用户的 token
+//     client.get(email, async (err, reply) => {
+//       if (err)
+//         throw new Error(err)
+//
+//       if (reply) {
+//         res.cookie('token', reply, { maxAge: 3600 * 1000 })
+//         res.send({ status: 'success', token: reply })
+//       }
+//       else {
+//         // 生成一个新的 token 并将其存储到 Redis 中
+//         const token = jwt.sign({ email }, privateKey)
+//         await client.set(email, token, 'EX', 3600, (err, reply) => {
+//           if (err)
+//             throw new Error(err)
+//         })
+//         // 设置 cookie，有效期为 1 小时
+//         res.cookie('token', token, { maxAge: 3600 * 1000 })
+//         res.send({ status: 'success', token })
+//       }
+//     })
+//   }
+//   catch (error) {
+//     res.send({ status: 'fail', message: error.message })
+//   }
+// })
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
-    console.log(req.body)
     // 验证 email 和 password 是否合法
     if (!email || !password)
       throw new Error('Invalid email or password')
@@ -88,7 +146,6 @@ router.post('/login', async (req, res) => {
       'SELECT * FROM users WHERE email = ?',
       [email],
     )
-    console.log(user)
     if (!user)
       throw new Error('User not found')
 
@@ -98,27 +155,47 @@ router.post('/login', async (req, res) => {
       throw new Error('Invalid password')
 
     // 检查 Redis 中是否存在该用户的 token
+    // client.get(email, async (err, reply) => {
+    //   if (err)
+    //     throw new Error(err)
+    //
+    //   if (reply) {
+    //     // 删除原来的 token
+    //     await client.del(email)
+    //     res.cookie('token', reply, { maxAge: 3600 * 1000 })
+    //     res.send({ status: 'success', token: reply })
+    //   }
+    //   else {
+    //     // 生成一个新的 token 并将其存储到 Redis 中
+    //     const token = jwt.sign({ email }, privateKey)
+    //     await client.set(email, token, 'EX', 3600, (err, reply) => {
+    //       if (err)
+    //         throw new Error(err)
+    //     })
+    //     // 设置 cookie，有效期为 1 小时
+    //     res.cookie('token', token, { maxAge: 3600 * 1000 })
+    //     res.send({ status: 'success', token })
+    //   }
+    // })
+    // 检查 Redis 中是否存在该用户的 token
     client.get(email, async (err, reply) => {
       if (err)
         throw new Error(err)
 
       if (reply) {
-        console.log(`Token exists for user ${email}: ${reply}`)
-        res.cookie('token', reply, { maxAge: 3600 * 1000 })
-        res.send({ status: 'success', token: reply })
+        // 删除 Redis 中的旧 token
+        await client.del(email)
       }
-      else {
-        // 生成一个新的 token 并将其存储到 Redis 中
-        const token = jwt.sign({ email }, privateKey)
-        await client.set(email, token, 'EX', 3600, (err, reply) => {
-          if (err)
-            throw new Error(err)
-          console.log(`Token ${token} is set for user ${email}`)
-        })
-        // 设置 cookie，有效期为 1 小时
-        res.cookie('token', token, { maxAge: 3600 * 1000 })
-        res.send({ status: 'success', token })
-      }
+
+      // 生成一个新的 token 并将其存储到 Redis 中
+      const token = jwt.sign({ email }, privateKey)
+      await client.set(email, token, 'EX', 3600, (err, reply) => {
+        if (err)
+          throw new Error(err)
+      })
+      // 设置 cookie，有效期为 1 小时
+      res.cookie('token', token, { maxAge: 3600 * 1000 })
+      res.send({ status: 'success', token })
     })
   }
   catch (error) {
@@ -126,10 +203,22 @@ router.post('/login', async (req, res) => {
   }
 })
 
+router.post('/verify', auth, async (req, res) => {
+  try {
+    res.status(401).send({ status: 'fail', message: 'Invalid token. Please authenticate.', code: 401 })
+    // res.send({ status: 'fail', message: 'Token is valid' })
+  }
+  catch (error) {
+    res.status(401).send({ status: 'fail', message: 'Invalid token. Please authenticate.', code: 401 })
+    // res.send({ status: 'fail', message: error.message })
+  }
+})
+
 router.post('/chat-process', [auth, limiter], async (req, res) => {
   res.setHeader('Content-type', 'application/octet-stream')
 
   try {
+    console.log('/chatprocess')
     const { prompt, options = {}, systemMessage } = req.body as RequestProps
     let firstChunk = true
 
@@ -151,7 +240,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   }
 })
 
-router.post('/config', auth, async (req, res) => {
+router.post('/config', async (req, res) => {
   try {
     const response = await chatConfig()
     res.send(response)

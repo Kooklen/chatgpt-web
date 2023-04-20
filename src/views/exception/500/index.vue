@@ -6,7 +6,7 @@ import Icon500 from '@/icons/500.vue'
 const router = useRouter()
 
 function goHome() {
-  router.push('/')
+  router.push('/login')
 }
 </script>
 
