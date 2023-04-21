@@ -1,11 +1,11 @@
 import axios, { type AxiosResponse } from 'axios'
-import { useNotification } from 'naive-ui'
+// import { useNotification } from 'naive-ui'
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_GLOB_API_URL,
 })
 
-const notification = useNotification()
+// const notification = useNotification()
 
 service.interceptors.request.use(
   (config) => {
@@ -34,16 +34,16 @@ service.interceptors.response.use(
   (error) => {
     console.log(error.response)
     if (error.response && error.response.status === 401) {
-      console.log(111)
       window.location.href = '/'
 
       // 返回 401 时进行页面跳转
-      notification.error({
-        content: '登陆过期',
-        meta: '正在跳转回主页',
-        duration: 2500,
-        keepAliveOnHover: false,
-      })
+      // notification.error({
+      //   content: '登陆过期',
+      //   meta: '正在跳转回主页',
+      //   duration: 2500,
+      //   keepAliveOnHover: false,
+      // })
+      alert('登陆过期,正在跳转回主页')
     }
     return Promise.reject(error)
   },

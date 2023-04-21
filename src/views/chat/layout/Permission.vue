@@ -1,5 +1,5 @@
 <script setup lang='ts'>
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { NButton, NInput, NModal, useMessage } from 'naive-ui'
 import { fetchVerify } from '@/api'
 import { useAuthStore } from '@/store'
@@ -17,8 +17,6 @@ const ms = useMessage()
 
 const loading = ref(false)
 const token = ref(localStorage.getItem('token'))
-
-// const disabled = computed(() => !token.value.trim() || loading.value)
 
 async function handleVerify() {
   const secretKey = token.value?.trim()
@@ -68,7 +66,6 @@ function handlePress(event: KeyboardEvent) {
         <NButton
           block
           type="primary"
-          :disabled="disabled"
           :loading="loading"
           @click="handleVerify"
         >

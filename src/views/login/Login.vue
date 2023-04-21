@@ -3,7 +3,7 @@ import { reactive, ref } from 'vue'
 import { NButton, NInput } from 'naive-ui'
 // import {regi}
 import axios from '@/utils/request/axios'
-import {router} from "@/router";
+import { router } from '@/router'
 const loginForm = reactive({
   email: '',
   password: '',
@@ -21,10 +21,17 @@ function submitLogin() {
     })
       .then((response) => {
         // 登录成功，保存 token
-        const token = response.data.token
-        localStorage.setItem('token', token)
-        // 跳转到主页
-        router.push('/chat')
+        if (response.data.status === 'success') {
+          console.log(response.data.status)
+          const token = response.data.token
+          localStorage.setItem('token', token)
+          // 跳转到主页
+          console.log(222)
+          router.push('/chat')
+        }
+        else {
+          alert(response.data.message)
+        }
       })
       .catch((error) => {
         // 登录失败，提示错误信息
@@ -38,11 +45,16 @@ function submitLogin() {
       invitationCode: loginForm.invitationCode ? loginForm.invitationCode : undefined,
     })
       .then((response) => {
-        // 登录成功，保存 token
-        const token = response.data.token
-        localStorage.setItem('token', token)
-        // 跳转到主页
-        router.push('/chat')
+        if (response.data.status === 'success') {
+          // 登录成功，保存 token
+          const token = response.data.token
+          localStorage.setItem('token', token)
+          // 跳转到主页
+          router.push('/chat')
+        }
+        else {
+          alert(response.data.message)
+        }
       })
       .catch((error) => {
         // 登录失败，提示错误信息

@@ -87,53 +87,6 @@ router.post('/register', async (req, res) => {
   }
 })
 
-// router.post('/login', async (req, res) => {
-//   try {
-//     const { email, password } = req.body
-//     // 验证 email 和 password 是否合法
-//     if (!email || !password)
-//       throw new Error('Invalid email or password')
-//
-//     // 检查数据库中是否存在该用户
-//     const [user] = await executeQuery(
-//       'SELECT * FROM users WHERE email = ?',
-//       [email],
-//     )
-//     if (!user)
-//       throw new Error('User not found')
-//
-//     // 使用 bcrypt 验证密码是否匹配
-//     const match = await bcrypt.compare(password, user.password)
-//     if (!match)
-//       throw new Error('Invalid password')
-//
-//     // 检查 Redis 中是否存在该用户的 token
-//     client.get(email, async (err, reply) => {
-//       if (err)
-//         throw new Error(err)
-//
-//       if (reply) {
-//         res.cookie('token', reply, { maxAge: 3600 * 1000 })
-//         res.send({ status: 'success', token: reply })
-//       }
-//       else {
-//         // 生成一个新的 token 并将其存储到 Redis 中
-//         const token = jwt.sign({ email }, privateKey)
-//         await client.set(email, token, 'EX', 3600, (err, reply) => {
-//           if (err)
-//             throw new Error(err)
-//         })
-//         // 设置 cookie，有效期为 1 小时
-//         res.cookie('token', token, { maxAge: 3600 * 1000 })
-//         res.send({ status: 'success', token })
-//       }
-//     })
-//   }
-//   catch (error) {
-//     res.send({ status: 'fail', message: error.message })
-//   }
-// })
-
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
@@ -154,30 +107,6 @@ router.post('/login', async (req, res) => {
     if (!match)
       throw new Error('Invalid password')
 
-    // 检查 Redis 中是否存在该用户的 token
-    // client.get(email, async (err, reply) => {
-    //   if (err)
-    //     throw new Error(err)
-    //
-    //   if (reply) {
-    //     // 删除原来的 token
-    //     await client.del(email)
-    //     res.cookie('token', reply, { maxAge: 3600 * 1000 })
-    //     res.send({ status: 'success', token: reply })
-    //   }
-    //   else {
-    //     // 生成一个新的 token 并将其存储到 Redis 中
-    //     const token = jwt.sign({ email }, privateKey)
-    //     await client.set(email, token, 'EX', 3600, (err, reply) => {
-    //       if (err)
-    //         throw new Error(err)
-    //     })
-    //     // 设置 cookie，有效期为 1 小时
-    //     res.cookie('token', token, { maxAge: 3600 * 1000 })
-    //     res.send({ status: 'success', token })
-    //   }
-    // })
-    // 检查 Redis 中是否存在该用户的 token
     client.get(email, async (err, reply) => {
       if (err)
         throw new Error(err)
@@ -218,9 +147,20 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   res.setHeader('Content-type', 'application/octet-stream')
 
   try {
-    console.log('/chatprocess')
     const { prompt, options = {}, systemMessage } = req.body as RequestProps
     let firstChunk = true
+
+    // 存储用户搜索记录
+    const authorizationHeader = req.header('Authorization')
+    const token = authorizationHeader.replace('Bearer ', '')
+    const decodedToken = jwt.verify(token, privateKey)
+    const userEmail = decodedToken.email
+    if (userEmail && prompt) {
+      await executeQuery(
+        'INSERT INTO search_history (user_email, keyword) VALUES (?, ?)',
+        [userEmail, prompt],
+      )
+    }
 
     await chatReplyProcess({
       message: prompt,
