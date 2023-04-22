@@ -1,33 +1,35 @@
 import axios, { type AxiosResponse } from 'axios'
-// import { useNotification } from 'naive-ui'
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_GLOB_API_URL,
 })
 
-// const notification = useNotification()
-
 service.interceptors.request.use(
   (config) => {
-    // const token = useAuthStore().token
     const token = localStorage.getItem('token')
-    console.log(token)
-    // if (!token)
-    //   return Promise.reject(new Error('No token available'))
 
     if (token)
       config.headers.Authorization = `Bearer ${token}`
     return config
   },
   (error) => {
+    window.location.href = '/'
+    alert('登陆过期,正在跳转回主页')
     return Promise.reject(error.response)
   },
 )
 
 service.interceptors.response.use(
   (response: AxiosResponse): AxiosResponse => {
-    if (response.status === 200)
-      return response
+    if (response.status === 200) {
+      if (Object.keys(response.data).length === 0 && response.data.constructor === Object) {
+        window.location.href = '/'
+        alert('登陆过期,正在跳转回主页')
+        // @ts-expect-error
+        return Promise.reject(new Error('Empty data returned'))
+      }
+    }
+    return response
 
     throw new Error(response.status.toString())
   },

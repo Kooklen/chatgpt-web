@@ -72,7 +72,7 @@ router.post('/register', async (req, res) => {
     // 返回 token
     const token = jwt.sign({ email }, privateKey, { algorithm: 'HS256' })
 
-    await client.set(token, email, (err, reply) => {
+    await client.set(email, token, 'EX', 3600, (err, reply) => {
       if (err)
         throw new Error(err)
     })
@@ -135,13 +135,19 @@ router.post('/login', async (req, res) => {
 router.post('/verify', auth, async (req, res) => {
   try {
     res.status(401).send({ status: 'fail', message: 'Invalid token. Please authenticate.', code: 401 })
-    // res.send({ status: 'fail', message: 'Token is valid' })
   }
   catch (error) {
     res.status(401).send({ status: 'fail', message: 'Invalid token. Please authenticate.', code: 401 })
-    // res.send({ status: 'fail', message: error.message })
   }
 })
+
+async function getUsersCountByDate(date) {
+  const [result] = await executeQuery(
+    'SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = ?',
+    [date],
+  )
+  return result.count
+}
 
 router.post('/chat-process', [auth, limiter], async (req, res) => {
   res.setHeader('Content-type', 'application/octet-stream')
@@ -150,15 +156,44 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
     const { prompt, options = {}, systemMessage } = req.body as RequestProps
     let firstChunk = true
 
+    if (prompt === 'ddd') {
+      const today = new Date().toISOString().split('T')[0]
+      const todayNewUsersCount = await getUsersCountByDate(today)
+
+      const [totalUsers] = await executeQuery('SELECT COUNT(*) as count FROM users')
+      const totalUsersCount = totalUsers.count
+
+      const [todaySearches] = await executeQuery(
+        'SELECT COUNT(*) as count FROM search_history WHERE DATE(search_time) = ?',
+        [today],
+      )
+      const todaySearchesCount = todaySearches.count
+
+      const [totalSearches] = await executeQuery('SELECT COUNT(*) as count FROM search_history')
+      const totalSearchesCount = totalSearches.count
+
+      const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\nTotal user searches: ${totalSearchesCount}`
+
+      const customChatMessage: ChatMessage = {
+        role: 'analysis',
+        text: statisticsMessage,
+      }
+
+      res.write(JSON.stringify(customChatMessage))
+      res.end()
+      return
+    }
+
     // 存储用户搜索记录
     const authorizationHeader = req.header('Authorization')
     const token = authorizationHeader.replace('Bearer ', '')
     const decodedToken = jwt.verify(token, privateKey)
     const userEmail = decodedToken.email
     if (userEmail && prompt) {
+      const truncatedPrompt = prompt.slice(0, 255)
       await executeQuery(
         'INSERT INTO search_history (user_email, keyword) VALUES (?, ?)',
-        [userEmail, prompt],
+        [userEmail, truncatedPrompt],
       )
     }
 

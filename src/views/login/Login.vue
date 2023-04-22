@@ -81,6 +81,9 @@ function handleLogin() {
 <template>
   <div class="bgc">
     <div class="login-container">
+      <div class="title">
+        OpenAI-chatgpt
+      </div>
       <div class="input-group">
         <label>邮箱：</label>
         <NInput v-model:value="loginForm.email" type="text" style="width: 200px" />
@@ -132,7 +135,9 @@ function handleLogin() {
 
 <style scoped lang="less">
 .bgc{
-	background-color: #4b9e5f;
+	background: no-repeat center center /100% url("../../assets/bg.png");
+	background-size: cover;
+	opacity: 1;
 	width: 100%;
 	height: 100%;
 }
@@ -144,20 +149,29 @@ function handleLogin() {
 	position: absolute;
 	top: 50%;
 	left: 50%;
-	width: 300px;
-	height: 300px;
-	margin-left: -150px;
-	margin-top: -150px;
-;
+	width: 400px;
+	height: 400px;
+	margin-left: -200px;
+	margin-top: -200px;
+	padding: 10px;
+	border-radius: 50px;
+	background-color: #4b9e5f;
+.title{
+	color: white;
+	font-size: 22px;
+	margin-bottom: 25px;
+}
 }
 
 .input-group {
 	margin-bottom: 1rem; display: flex;height: 40px;line-height: 40px;
+label{color: white}
 }
 .btn{
 	width: 100%;
 	display: flex;
 	align-content: space-between;
+	margin-top: 20px;
 }
 
 #input{
@@ -169,4 +183,31 @@ display: inline-block;width: 80px;
 }
 
 button {cursor: pointer;}
+
+@media (max-width: 500px) {
+	.bgc {
+		background: no-repeat center/100% url("../../assets/bg_mobile.png");
+		.login-container {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: 350px;
+			height: 350px;
+			margin-left: -175px;
+			margin-top: -175px;
+			padding: 10px;
+			border-radius: 50px;
+			background-color: #4b9e5f;
+			.title{
+				color: white;
+				font-size: 22px;
+				margin-bottom: 25px;
+			}
+		}
+	}
+}
 </style>

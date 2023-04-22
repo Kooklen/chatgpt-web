@@ -156,7 +156,12 @@ async function onConversation() {
     await fetchChatAPIOnce()
   }
   catch (error: any) {
-    const errorMessage = error?.message ?? t('common.wrong')
+    console.log(error)
+    let errorMessage = ''
+    if (error.role === 'analysis')
+      errorMessage = error?.message ?? t('common.analysis')
+    else
+      errorMessage = error?.message ?? t('common.wrong')
 
     if (error.message === 'canceled') {
       updateChatSome(

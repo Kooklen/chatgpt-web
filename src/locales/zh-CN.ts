@@ -22,6 +22,7 @@ export default {
     download: '下载',
     noData: '暂无数据',
     wrong: '好像出错了，请稍后再试。',
+    analysis: '数据统计信息',
     success: '操作成功',
     failed: '操作失败',
     verify: '验证',
