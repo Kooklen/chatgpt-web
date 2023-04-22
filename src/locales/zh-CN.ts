@@ -72,6 +72,7 @@ export default {
     balance: 'API余额',
   },
   store: {
+    feedbackBug: '反馈BUG(有奖)',
     supportMe: '支持一下',
     siderButton: '提示词商店',
     local: '本地',

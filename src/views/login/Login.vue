@@ -1,19 +1,21 @@
 <script lang="ts" setup>
-import { reactive, ref } from 'vue'
-import { NButton, NInput } from 'naive-ui'
-// import {regi}
+import { computed, reactive, ref } from 'vue'
+import { NButton, NInput, useNotification } from 'naive-ui'
 import axios from '@/utils/request/axios'
-import { router } from '@/router'
+const notification = useNotification()
 const loginForm = reactive({
   email: '',
   password: '',
   invitationCode: '',
 })
 
+const isReadyLogin = computed(
+  () => loginForm.email && loginForm.password.length >= 6,
+)
+
 const loginStatus = ref(true)
 
 function submitLogin() {
-  console.log('登录信息：', loginForm)
   if (loginStatus.value) {
     axios.post('/login', {
       email: loginForm.email,
@@ -22,12 +24,13 @@ function submitLogin() {
       .then((response) => {
         // 登录成功，保存 token
         if (response.data.status === 'success') {
-          console.log(response.data.status)
           const token = response.data.token
           localStorage.setItem('token', token)
           // 跳转到主页
-          console.log(222)
-          router.push('/chat')
+          notification.success({
+            content: loginStatus.value ? '登录成功' : '注册成功',
+          })
+          window.location.href = '#/chat'
         }
         else {
           alert(response.data.message)
@@ -50,7 +53,7 @@ function submitLogin() {
           const token = response.data.token
           localStorage.setItem('token', token)
           // 跳转到主页
-          router.push('/chat')
+          window.location.href = '#/chat'
         }
         else {
           alert(response.data.message)
@@ -70,7 +73,6 @@ function validateEmail(email: string) {
 
 function handleLogin() {
   if (!validateEmail(loginForm.email)) {
-    console.log(loginForm.email)
     alert('请输入有效的邮箱地址')
     return
   }
@@ -103,21 +105,24 @@ function handleLogin() {
         <label>邀请码：</label>
         <NInput
           v-model:value="loginForm.invitationCode"
-          type="password"
           show-password-on="mousedown"
-          placeholder="如果有的话"
-          :maxlength="8"
+          placeholder="非必填"
+          :minlength="6"
+          :maxlength="12"
           style="width: 200px"
         />
       </div>
       <div class="btn">
-        <NButton v-if="loginStatus" type="success" :disabled="!loginForm.email && !loginForm.password" @click="handleLogin">
+        <NButton
+          v-if="loginStatus" type="success" :disabled="!isReadyLogin"
+          @click="handleLogin"
+        >
           登录
         </NButton>
         <NButton
           v-else
           type="success"
-          :disabled="!loginForm.email && !loginForm.password"
+          :disabled="!isReadyLogin"
           @click="handleLogin"
         >
           注册

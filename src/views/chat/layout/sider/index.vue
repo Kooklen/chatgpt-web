@@ -82,6 +82,18 @@ watch(
           <NPopover trigger="click" :delay="1500" :duration="1500">
             <template #trigger>
               <NButton type="primary" block>
+                {{ $t('store.feedbackBug') }}
+              </NButton>
+            </template>
+            <div>
+              <img src="https://i.328888.xyz/2023/04/22/i58CjJ.jpeg" style="width: 220px;height: 190px;">
+            </div>
+          </NPopover>
+        </div>
+        <div class="p-4 pb-0">
+          <NPopover trigger="click" :delay="1500" :duration="1500">
+            <template #trigger>
+              <NButton type="primary" block>
                 {{ $t('store.supportMe') }}
               </NButton>
             </template>
