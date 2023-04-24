@@ -3,7 +3,7 @@ import type { Ref } from 'vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { NAutoComplete, NButton, NInput, useDialog, useMessage } from 'naive-ui'
+import { NAutoComplete, NButton, NCard, NInput, NModal, NSelect, useDialog, useMessage } from 'naive-ui'
 import html2canvas from 'html2canvas'
 import { Message } from './components'
 import { useScroll } from './hooks/useScroll'
@@ -42,7 +42,68 @@ const conversationList = computed(() => dataSources.value.filter(item => (!item.
 const prompt = ref<string>('')
 const loading = ref<boolean>(false)
 const inputRef = ref<Ref | null>(null)
+const showModal = ref(false)
+const foreignTradeAssistant = ref({
+  productName: '',
+  keyword: '',
+  language: 'english',
+  fiveListing: '5 bullet points',
+  title: 'product title',
+  description: 'product description',
+  descriptionNumber: '500',
+})
 
+const fiveListingOptions = ref(
+  [
+    {
+      label: '五点描述',
+      value: '5 bullet points',
+    },
+    {
+      label: '不生成',
+      value: '',
+    },
+  ],
+)
+
+const titleOptions = ref(
+  [
+    {
+      label: '攥写标题',
+      value: 'product title',
+    },
+    {
+      label: '不生成',
+      value: '',
+    },
+  ],
+)
+
+const descriptionOptions = ref(
+  [
+    {
+      label: '商品描述',
+      value: 'product description',
+    },
+    {
+      label: '不生成',
+      value: '',
+    },
+  ],
+)
+
+const languageOptions = ref(
+  [
+    {
+      label: '英语',
+      value: 'english',
+    },
+    {
+      label: '英语+中文',
+      value: 'english and chinese',
+    },
+  ],
+)
 // 添加PromptStore
 const promptStore = usePromptStore()
 
@@ -54,6 +115,188 @@ dataSources.value.forEach((item, index) => {
   if (item.loading)
     updateChatSome(+uuid, index, { loading: false })
 })
+
+function generateListing() {
+  // let promptValue = 'You are a professional Amazon seller.\n'
+  let promptValue = ''
+  // Add product name
+  promptValue += `My product Name: ${foreignTradeAssistant.value.productName}\n`
+
+  // Add keyword
+  promptValue += `The product features are: ${foreignTradeAssistant.value.keyword}\n`
+
+  // Add fiveListing option
+  if (foreignTradeAssistant.value.fiveListing)
+    promptValue += 'Help me write an Amazon Five-Point product description\n'
+
+  // Add title option
+  if (foreignTradeAssistant.value.title)
+    promptValue += 'Help me write an good Amazon title\n'
+
+  // Add description option
+  if (foreignTradeAssistant.value.description)
+    promptValue += 'Help me write an good Amazon description\n'
+
+  // Add language
+  promptValue += `in ${foreignTradeAssistant.value.language}\n`
+
+  // Update the prompt value
+  prompt.value = promptValue
+  console.log(promptValue)
+  showModal.value = false
+  generateConversation()
+}
+
+async function generateConversation() {
+  let message = prompt.value
+
+  if (loading.value)
+    return
+
+  if (!message || message.trim() === '')
+    return
+
+  controller = new AbortController()
+
+  addChat(
+    +uuid,
+    {
+      dateTime: new Date().toLocaleString(),
+      text: message,
+      inversion: true,
+      error: false,
+      conversationOptions: null,
+      requestOptions: { prompt: message, options: null },
+    },
+  )
+  scrollToBottom()
+
+  loading.value = true
+  prompt.value = ''
+
+  let options: Chat.ConversationRequest = {}
+  const lastContext = conversationList.value[conversationList.value.length - 1]?.conversationOptions
+
+  if (lastContext && usingContext.value)
+    options = { ...lastContext }
+
+  addChat(
+    +uuid,
+    {
+      dateTime: new Date().toLocaleString(),
+      text: '',
+      loading: true,
+      inversion: false,
+      error: false,
+      conversationOptions: null,
+      requestOptions: { prompt: message, options: { ...options } },
+    },
+  )
+  scrollToBottom()
+
+  try {
+    let lastText = ''
+    const fetchChatAPIOnce = async () => {
+      await fetchChatAPIProcess<Chat.ConversationResponse>({
+        prompt: message,
+        options,
+        signal: controller.signal,
+        onDownloadProgress: ({ event }) => {
+          const xhr = event.target
+          const { responseText } = xhr
+          // Always process the final line
+          const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
+          let chunk = responseText
+          if (lastIndex !== -1)
+            chunk = responseText.substring(lastIndex)
+          try {
+            const data = JSON.parse(chunk)
+            updateChat(
+              +uuid,
+              dataSources.value.length - 1,
+              {
+                dateTime: new Date().toLocaleString(),
+                text: lastText + data.text ?? '',
+                inversion: false,
+                error: false,
+                loading: false,
+                conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
+                requestOptions: { prompt: message, options: { ...options } },
+              },
+            )
+
+            if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
+              options.parentMessageId = data.id
+              lastText = data.text
+              message = ''
+              return fetchChatAPIOnce()
+            }
+
+            scrollToBottomIfAtBottom()
+          }
+          catch (error) {
+            //
+          }
+        },
+      })
+    }
+
+    await fetchChatAPIOnce()
+  }
+  catch (error: any) {
+    console.log(error)
+    let errorMessage = ''
+    if (error.role === 'analysis')
+      errorMessage = error?.message ?? t('common.analysis')
+    else
+      errorMessage = error?.message ?? t('common.wrong')
+
+    if (error.message === 'canceled') {
+      updateChatSome(
+        +uuid,
+        dataSources.value.length - 1,
+        {
+          loading: false,
+        },
+      )
+      scrollToBottomIfAtBottom()
+      return
+    }
+
+    const currentChat = getChatByUuidAndIndex(+uuid, dataSources.value.length - 1)
+
+    if (currentChat?.text && currentChat.text !== '') {
+      updateChatSome(
+        +uuid,
+        dataSources.value.length - 1,
+        {
+          text: `${currentChat.text}\n[${errorMessage}]`,
+          error: false,
+          loading: false,
+        },
+      )
+      return
+    }
+
+    updateChat(
+      +uuid,
+      dataSources.value.length - 1,
+      {
+        dateTime: new Date().toLocaleString(),
+        text: errorMessage,
+        inversion: false,
+        error: true,
+        loading: false,
+        conversationOptions: null,
+        requestOptions: { prompt: message, options: { ...options } },
+      },
+    )
+    scrollToBottomIfAtBottom()
+  }
+  finally {
+    loading.value = false
+  }
+}
 
 function handleSubmit() {
   onConversation()
@@ -560,8 +803,63 @@ onUnmounted(() => {
               </span>
             </template>
           </NButton>
+          <NButton type="primary" @click="showModal = true">
+            <template #icon>
+              <span class="dark:text-black" style="font-size: 12px">
+                外贸助手
+              </span>
+            </template>
+          </NButton>
+          <NModal v-model:show="showModal">
+            <NCard
+              style="width: 800px"
+              title="外贸助手"
+              :bordered="false"
+              size="huge"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div class="foreignTradeAssistant">
+                <div class="input flex-row">
+                  <NInput v-model:value="foreignTradeAssistant.productName" class="mr-5" type="text" placeholder="请输入产品名" style="width: 150px" />
+                  <NInput v-model:value="foreignTradeAssistant.keyword" type="text" placeholder="输入关键词，多个关键词请使用逗号分隔" style="" />
+                </div>
+                <div class="options">
+                  <NSelect v-model:value="foreignTradeAssistant.fiveListing" :options="fiveListingOptions" style="width: 120px;margin-right: 20px" />
+                  <NSelect v-model:value="foreignTradeAssistant.title" :options="titleOptions" style="width: 120px;margin-right: 20px" />
+                  <NSelect v-model:value="foreignTradeAssistant.description" :options="descriptionOptions" style="width: 100px;margin-right: 20px" />
+
+                  <NInput v-show="foreignTradeAssistant.description" v-model:value="foreignTradeAssistant.descriptionNumber" style="width: 50px" />
+                  <span v-show="foreignTradeAssistant.description" class="text-sm" style="line-height: 20px;margin: auto 0;margin-right: 20px">字</span>
+
+                  <NSelect v-model:value="foreignTradeAssistant.language" :options="languageOptions" style="width: 120px;margin-right: 20px" />
+
+                  <NButton type="info" style="width: 60px;margin-left: auto" :disabled="!foreignTradeAssistant.productName || !foreignTradeAssistant.keyword" @click="generateListing">
+                    生成
+                  </NButton>
+                </div>
+                <div />
+              </div>
+              <template #footer>
+                <span class="text-gray-500">使用方法：输入你的产品产品名和关键词，点击生成按钮，通过AI实时生成五点描述。</span>
+              </template>
+            </NCard>
+          </NModal>
         </div>
       </div>
     </footer>
   </div>
 </template>
+
+<style lang="less">
+.foreignTradeAssistant{
+	.input{
+		display: flex;
+	}
+	.options{
+		margin-top: 20px;
+		display: flex;
+		flex: 1;
+	}
+}
+</style>
