@@ -90,7 +90,7 @@ watch(
             </div>
           </NPopover>
         </div>
-        <div class="p-4 pb-0">
+        <div class="p-4 pb-0 mb-2">
           <NPopover trigger="click" :delay="1500" :duration="1500">
             <template #trigger>
               <NButton type="primary" block>
@@ -102,11 +102,11 @@ watch(
             </div>
           </NPopover>
         </div>
-        <div class="p-4">
-          <NButton block @click="show = true">
-            {{ $t('store.siderButton') }}
-          </NButton>
-        </div>
+        <!--        <div class="p-4"> -->
+        <!--          <NButton block @click="show = true"> -->
+        <!--            {{ $t('store.siderButton') }} -->
+        <!--          </NButton> -->
+        <!--        </div> -->
       </main>
       <Footer />
     </div>

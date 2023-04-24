@@ -9,6 +9,8 @@ const loginForm = reactive({
   invitationCode: '',
 })
 
+localStorage.removeItem('token')
+
 const isReadyLogin = computed(
   () => loginForm.email && loginForm.password.length >= 6,
 )
@@ -33,7 +35,9 @@ function submitLogin() {
           window.location.href = '#/chat'
         }
         else {
-          alert(response.data.message)
+          notification.error({
+            content: response.data.message === 'Invalid password' ? '无效的账号或者密码' : response.data.message,
+          })
         }
       })
       .catch((error) => {
@@ -56,7 +60,9 @@ function submitLogin() {
           window.location.href = '#/chat'
         }
         else {
-          alert(response.data.message)
+          notification.error({
+            content: response.data.message === 'User already exists' ? '用户已经注册' : response.data.message,
+          })
         }
       })
       .catch((error) => {
@@ -73,7 +79,9 @@ function validateEmail(email: string) {
 
 function handleLogin() {
   if (!validateEmail(loginForm.email)) {
-    alert('请输入有效的邮箱地址')
+    notification.error({
+      content: '请输入有效的邮箱地址',
+    })
     return
   }
   submitLogin()
@@ -140,8 +148,9 @@ function handleLogin() {
 
 <style scoped lang="less">
 .bgc{
-	background: no-repeat center center /100% url("../../assets/bg.png");
-	background-size: cover;
+	//background: no-repeat center center /100% url("../../assets/bgc.png");
+	//background-size: cover;
+	background: white;
 	opacity: 1;
 	width: 100%;
 	height: 100%;
@@ -152,14 +161,11 @@ function handleLogin() {
 	align-items: center;
 	justify-content: center;
 	position: absolute;
-	top: 50%;
-	left: 50%;
-	width: 400px;
-	height: 400px;
-	margin-left: -200px;
-	margin-top: -200px;
-	padding: 10px;
-	border-radius: 50px;
+	top: 0;
+	right: 0;
+	width: 30vw;
+	min-width: 335px;
+	height: 100%;
 	background-color: #4b9e5f;
 .title{
 	color: white;
@@ -173,7 +179,7 @@ function handleLogin() {
 label{color: white}
 }
 .btn{
-	width: 100%;
+	width: 50%;
 	display: flex;
 	align-content: space-between;
 	margin-top: 20px;
@@ -191,21 +197,14 @@ button {cursor: pointer;}
 
 @media (max-width: 500px) {
 	.bgc {
-		background: no-repeat center/100% url("../../assets/bg_mobile.png");
+		//background: no-repeat center/100% url("../../assets/bg_mobile.png");
 		.login-container {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			position: absolute;
-			top: 50%;
-			left: 50%;
-			width: 350px;
-			height: 350px;
-			margin-left: -175px;
-			margin-top: -175px;
-			padding: 10px;
-			border-radius: 50px;
+			width: 100%;
+			height: 100%;
 			background-color: #4b9e5f;
 			.title{
 				color: white;
