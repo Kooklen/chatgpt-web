@@ -76,7 +76,7 @@ router.post('/register', async (req, res) => {
       if (err)
         throw new Error(err)
     })
-    res.cookie('token', token, { maxAge: 3600 * 1000 })
+    res.cookie('token', token, { maxAge: 3600 * 10000 })
 
     res.send({ status: 'success', token })
 
@@ -118,12 +118,12 @@ router.post('/login', async (req, res) => {
 
       // 生成一个新的 token 并将其存储到 Redis 中
       const token = jwt.sign({ email }, privateKey)
-      await client.set(email, token, 'EX', 3600, (err, reply) => {
+      await client.set(email, token, 'EX', 36000, (err, reply) => {
         if (err)
           throw new Error(err)
       })
       // 设置 cookie，有效期为 1 小时
-      res.cookie('token', token, { maxAge: 3600 * 1000 })
+      res.cookie('token', token, { maxAge: 3600 * 10000 })
       res.send({ status: 'success', token })
     })
   }
@@ -142,9 +142,15 @@ router.post('/verify', auth, async (req, res) => {
 })
 
 async function getUsersCountByDate(date) {
+  const startDate = new Date(date)
+  startDate.setHours(0, 0, 0, 0)
+
+  const endDate = new Date(date)
+  endDate.setHours(23, 59, 59, 999)
+
   const [result] = await executeQuery(
-    'SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = ?',
-    [date],
+    'SELECT COUNT(*) as count FROM users WHERE created_at >= ? AND created_at <= ?',
+    [startDate, endDate],
   )
   return result.count
 }
@@ -169,11 +175,22 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       )
       const todaySearchesCount = todaySearches.count
 
+      const yesterday = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0]
+      const yesterdayNewUsersCount = await getUsersCountByDate(yesterday)
+
       const [totalSearches] = await executeQuery('SELECT COUNT(*) as count FROM search_history')
       const totalSearchesCount = totalSearches.count
 
-      const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\nTotal user searches: ${totalSearchesCount}`
+      const topUsers = await executeQuery(
+        'SELECT user_email, COUNT(*) as search_count FROM search_history GROUP BY user_email ORDER BY search_count DESC LIMIT 3',
+      )
 
+      let topUsersMessage = 'Top 3 users with highest search counts:\n'
+      topUsers.forEach((user, index) => {
+        topUsersMessage += `${index + 1}. ${user.user_email} - ${user.search_count} searches\n`
+      })
+
+      const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nYesterday's new users: ${yesterdayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\nTotal user searches: ${totalSearchesCount}\n ${topUsersMessage}`
       const customChatMessage: ChatMessage = {
         role: 'analysis',
         text: statisticsMessage,
