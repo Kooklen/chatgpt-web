@@ -18,8 +18,8 @@ import { fetchChatAPIProcess } from '@/api'
 import { t } from '@/locales'
 const notification = useNotification()
 notification.success({
-  content: '云服务厂商的域名解析可能会出问题，请及时在左侧菜单栏添加客服微信，以便获取备用地址。',
-  duration: 10000,
+  content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：chatgptbolt.com',
+  duration: 3000,
 })
 
 let controller = new AbortController()
@@ -558,7 +558,7 @@ onUnmounted(() => {
               />
             </template>
           </NAutoComplete>
-          <NButton type="primary" :disabled="buttonDisabled" @click="handleSubmit">
+          <NButton type="info" :disabled="buttonDisabled" @click="handleSubmit">
             <template #icon>
               <span class="dark:text-black">
                 <SvgIcon icon="ri:send-plane-fill" />

@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import type { FormInst, FormItemInst, FormItemRule, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, useNotification } from 'naive-ui'
 import axios from '@/utils/request/axios'
+import { debounce } from '@/utils/functions/debounce'
 const notification = useNotification()
 const loginForm = reactive({
   email: '',
@@ -15,6 +16,8 @@ localStorage.removeItem('token')
 const isReadyLogin = computed(
   () => loginForm.email && loginForm.password.length >= 6,
 )
+
+const debouncedHandleLogin = debounce(handleLogin, 2000)
 
 const loginStatus = ref(true)
 
@@ -32,6 +35,7 @@ function submitLogin() {
           // 跳转到主页
           notification.success({
             content: loginStatus.value ? '登录成功' : '注册成功',
+            duration: 3000,
           })
           window.location.href = '#/chat'
         }
@@ -73,18 +77,7 @@ function submitLogin() {
   }
 }
 
-function validateEmail(email: string) {
-  const emailRegex = /^\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/
-  return emailRegex.test(email)
-}
-
 function handleLogin() {
-  if (!validateEmail(loginForm.email)) {
-    notification.error({
-      content: '请输入有效的邮箱地址',
-    })
-    return
-  }
   submitLogin()
 }
 
@@ -161,15 +154,17 @@ function handlePasswordInput() {
       <div class="bgc-container" />
     </div>
     <div class="login-container">
-			<div class="small-bgc"></div>
+      <div class="small-bgc" />
       <div class="logo">
         <div class="logo-pic" />
         <div class="logo-word" />
       </div>
-			<div class="small-logo">
-				<div class="logo-pic" />
-				<div class="logo-word" >登录到ChatGPT Bolt</div>
-			</div>
+      <div class="small-logo">
+        <div class="logo-pic" />
+        <div class="logo-word">
+          登录到ChatGPT Bolt
+        </div>
+      </div>
 
       <div class="input-group">
         <NForm ref="formRef" :model="loginForm" :rules="rules">
@@ -189,7 +184,7 @@ function handlePasswordInput() {
           <NFormItem v-if="!loginStatus" path="invitationCode" label="邀请码">
             <NInput
               v-model:value="loginForm.invitationCode"
-							placeholder="邀请码（可选）"
+              placeholder="邀请码（可选）"
               size="large"
               @keydown.enter.prevent
             />
@@ -200,7 +195,7 @@ function handlePasswordInput() {
       <div class="btn">
         <NButton
           v-if="loginStatus" :disabled="!isReadyLogin"
-          class="submit" @click="handleLogin"
+          class="submit" @click="debouncedHandleLogin"
         >
           登录
         </NButton>
@@ -208,7 +203,7 @@ function handlePasswordInput() {
           v-else
           class="submit"
           :disabled="!isReadyLogin"
-          @click="handleLogin"
+          @click="debouncedHandleLogin"
         >
           注册
         </NButton>
@@ -240,7 +235,7 @@ function handlePasswordInput() {
 	width: 683px;
 	.play-gpt{
 		position: absolute;
-		bottom: 25%;
+		bottom: 20%;
 		left: 50%;
 		margin-left: -163.25px;
 		margin-top: -30px;
@@ -267,13 +262,14 @@ function handlePasswordInput() {
 	width: 30vw;
 	min-width: 335px;
 	height: 100%;
-	overflow: hidden;
+	overflow-y: auto;
 	background-color: #fff;
 	.logo{
-		margin-top: 156px;
+		margin-top: 10vh;
 		.logo-pic{
-			width: 120px;
-			height: 120px;
+			z-index: 20;
+			width: 8vw;
+			height: 18vh;
 			margin: 0 auto;
 			background: no-repeat center center /100% url("../../assets/logo.png");
 		}
@@ -283,6 +279,19 @@ function handlePasswordInput() {
 			width: 250px;
 			height: 48px;
 			background: no-repeat center center /100% url("../../assets/logo-word.png");
+			white-space: nowrap;
+			border-right: 2px solid transparent;
+			animation: typing 1s steps(15, end), blink-caret .75s step-end infinite;
+			overflow: hidden;
+			@keyframes typing {
+				from { width: 0; }
+				to { width: 250px; }
+			}
+			/* 光标闪啊闪 */
+			@keyframes blink-caret {
+				from, to { box-shadow: 1px 0 0 0 transparent; }
+				50% { box-shadow: 1px 0 0 0 transparent; }
+			}
 		}
 	}
 	.small-logo{
@@ -334,12 +343,13 @@ function handlePasswordInput() {
 
 @media (max-width: 1024px) {
 	.login-bgc{
-		width: 0px;
+		width: 0;
 		overflow: hidden;
 }
 	.login-container{
 		position: relative;
 		width: 100%;
+		min-width: 400px;
 		.small-bgc{
 			position: absolute;
 			top: 20px;
@@ -358,26 +368,43 @@ function handlePasswordInput() {
 		display: block!important;
 		width: 70%;
 		margin: 0 auto;
-		margin-top: 156px;
+		margin-top: 80px;
 		height: 200px;
 		.logo-pic{
 			margin: 0 auto;
-			width: 120px;
-			height: 120px;
+			width: 80px;
+			height: 80px;
 			background: no-repeat center center /100% url("../../assets/small-logo.png");
 		}
 		.logo-word{
 			margin: 0 auto;
 			margin-top: 14px;
 			height: 40px;
-			text-align: center;
+			line-height: 40px;
+			width: 250px;
 			font-size: 26px;
 			font-weight: 400;
-			line-height: 40px;
 			background: linear-gradient(180deg, #6EBBFF 0%, #0A64FF 100%);
 			-webkit-background-clip: text;
 			-webkit-text-fill-color: transparent;
+			white-space: nowrap;
+			border-right: 2px solid transparent;
+			animation: typing 1.5s steps(15, end), blink-caret .75s step-end infinite;
+			overflow: hidden;
+			/* 打印效果 */
+			@keyframes typing {
+				from { width: 0; }
+				to { width: 250px; }
+			}
+			/* 光标闪啊闪 */
+			@keyframes blink-caret {
+				from, to { box-shadow: 1px 0 0 0 transparent; }
+				50% { box-shadow: 1px 0 0 0 transparent; }
+			}
 		}
+	}
+	.input-group{
+		margin-top: 0!important;
 	}
 }
 </style>
