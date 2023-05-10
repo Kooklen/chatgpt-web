@@ -8,15 +8,19 @@ import { useLanguage } from '@/hooks/useLanguage'
 const { language } = useLanguage()
 const themeOverrides: GlobalThemeOverrides = {
   common: {
-    primaryColor: '#39ACFF',
+    primaryColor: 'rgba(57,172,255,0.8)',
+    primaryColorHover: '#39ACFF',
   },
   AutoComplete: {
-    // colorHover: '#eee',
-    // borderFocus: '#eee',
   },
   Input: {
-    // colorHover: '#eee',
     borderFocus: '#eee',
+  },
+  Button: {
+    borderHover: '#39ACFF',
+  },
+  Icon: {
+    color: '#39ACFF',
   },
 }
 </script>

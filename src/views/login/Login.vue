@@ -37,6 +37,10 @@ function submitLogin() {
             content: loginStatus.value ? '登录成功' : '注册成功',
             duration: 3000,
           })
+          notification.success({
+            content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：chatgptbolt.com',
+            duration: 10000,
+          })
           window.location.href = '#/chat'
         }
         else {

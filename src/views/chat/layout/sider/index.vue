@@ -70,10 +70,10 @@ watch(
   >
     <div class="flex flex-col h-full" :style="mobileSafeArea">
       <main class="flex flex-col flex-1 min-h-0">
-        <div class="p-4">
-          <NButton dashed block @click="handleAdd">
+        <div class="mb-4">
+          <button block class="new-btn" @click="handleAdd">
             {{ $t('chat.newChatButton') }}
-          </NButton>
+          </button>
         </div>
         <div class="flex-1 min-h-0 pb-4 overflow-hidden">
           <List />
@@ -116,3 +116,18 @@ watch(
   </template>
   <PromptStore v-model:visible="show" />
 </template>
+
+<style scoped>
+  .new-btn{
+		color: #438EFF;
+		width: 100%;
+		height: 75px;
+		margin-left: 0;
+		margin-right: 0;
+		background: #FBFBFB;
+	}
+	.new-btn:hover {
+		background: #e9e9e9;
+		/*color: #438EFF;*/
+	}
+</style>

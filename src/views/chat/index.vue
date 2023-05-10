@@ -3,7 +3,7 @@ import type { Ref } from 'vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { NAutoComplete, NButton, NInput, useDialog, useMessage, useNotification } from 'naive-ui'
+import { NAutoComplete, NButton, NInput, useDialog, useMessage } from 'naive-ui'
 import html2canvas from 'html2canvas'
 import { Message } from './components'
 import { useScroll } from './hooks/useScroll'
@@ -16,12 +16,6 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useChatStore, usePromptStore } from '@/store'
 import { fetchChatAPIProcess } from '@/api'
 import { t } from '@/locales'
-const notification = useNotification()
-notification.success({
-  content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：chatgptbolt.com',
-  duration: 3000,
-})
-
 let controller = new AbortController()
 
 const openLongReply = import.meta.env.VITE_GLOB_OPEN_LONG_REPLY === 'true'
@@ -539,7 +533,7 @@ onUnmounted(() => {
             </span>
           </HoverButton>
           <HoverButton v-if="!isMobile" @click="toggleUsingContext">
-            <span class="text-xl" :class="{ 'text-[#4b9e5f]': usingContext, 'text-[#a8071a]': !usingContext }">
+            <span class="text-xl" :class="{ 'history-normal': usingContext, 'text-[#a8071a]': !usingContext }">
               <SvgIcon icon="ri:chat-history-line" />
             </span>
           </HoverButton>
@@ -570,3 +564,9 @@ onUnmounted(() => {
     </footer>
   </div>
 </template>
+
+<style>
+	.history-normal{
+		color: #42adff;
+	}
+</style>
