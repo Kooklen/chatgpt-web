@@ -22,6 +22,9 @@ const themeOverrides: GlobalThemeOverrides = {
   Icon: {
     color: '#39ACFF',
   },
+  LoadingBar: {
+    colorLoading: '#39ACFF',
+  },
 }
 </script>
 

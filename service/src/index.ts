@@ -159,7 +159,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   res.setHeader('Content-type', 'application/octet-stream')
 
   try {
-    const { prompt, options = {}, systemMessage } = req.body as RequestProps
+    const { prompt, options = {}, systemMessage, model } = req.body as RequestProps
     let firstChunk = true
 
     if (prompt === 'ddd') {
@@ -192,6 +192,8 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
 
       const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nYesterday's new users: ${yesterdayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\nTotal user searches: ${totalSearchesCount}\n ${topUsersMessage}`
       const customChatMessage: ChatMessage = {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error
         role: 'analysis',
         text: statisticsMessage,
       }
@@ -214,6 +216,26 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       )
     }
 
+    if (model === 'gpt-4') {
+      const today = new Date()
+      const [user] = await executeQuery(
+        'SELECT * FROM users WHERE email = ? AND membership_start <= ? AND membership_end >= ?',
+        [userEmail, today, today],
+      )
+      if (!user) {
+        const customChatMessage: ChatMessage = {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-expect-error
+          role: '',
+          text: '很抱歉，您还没有开通GPT4.0的使用权限，请在左侧联系客服',
+        }
+
+        res.write(JSON.stringify(customChatMessage))
+        res.end()
+        return
+      }
+    }
+
     await chatReplyProcess({
       message: prompt,
       lastContext: options,
@@ -222,6 +244,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
         firstChunk = false
       },
       systemMessage,
+      model: model === 'gpt-4' ? 'gpt-4' : '', // Add model parameter here
     })
   }
   catch (error) {

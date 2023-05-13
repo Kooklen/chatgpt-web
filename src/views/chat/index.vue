@@ -3,7 +3,7 @@ import type { Ref } from 'vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { NAutoComplete, NButton, NInput, useDialog, useMessage } from 'naive-ui'
+import { NAutoComplete, NButton, NInput, NSelect, useDialog, useMessage } from 'naive-ui'
 import html2canvas from 'html2canvas'
 import { Message } from './components'
 import { useScroll } from './hooks/useScroll'
@@ -41,6 +41,19 @@ const conversationList = computed(() => dataSources.value.filter(item => (!item.
 const prompt = ref<string>('')
 const loading = ref<boolean>(false)
 const inputRef = ref<Ref | null>(null)
+
+const model = ref('')
+
+const options = ref([
+  {
+    label: '3.5模型',
+    value: '',
+  },
+  {
+    label: '4.0模型',
+    value: 'gpt-4',
+  },
+])
 
 // 添加PromptStore
 const promptStore = usePromptStore()
@@ -109,6 +122,7 @@ async function onConversation() {
     let lastText = ''
     const fetchChatAPIOnce = async () => {
       await fetchChatAPIProcess<Chat.ConversationResponse>({
+        model: model.value,
         prompt: message,
         options,
         signal: controller.signal,
@@ -559,6 +573,7 @@ onUnmounted(() => {
               </span>
             </template>
           </NButton>
+          <NSelect v-show="!dataSources.length" v-model:value="model" :options="options" style="width: 150px;" />
         </div>
       </div>
     </footer>

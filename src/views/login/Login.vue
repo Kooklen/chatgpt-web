@@ -38,9 +38,13 @@ function submitLogin() {
             duration: 3000,
           })
           notification.success({
-            content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：chatgptbolt.com',
+            content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：AIworlds.cc',
             duration: 10000,
           })
+					notification.success({
+						content: 'chatgpt4.0模型已经上线',
+						duration: 10000,
+					})
           window.location.href = '#/chat'
         }
         else {
