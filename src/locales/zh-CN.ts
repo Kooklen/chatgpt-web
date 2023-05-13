@@ -61,6 +61,8 @@ export default {
     description: '描述',
     role: '角色设定',
     resetUserInfo: '重置用户信息',
+    status: '登录状态',
+    logout: '退出登录',
     chatHistory: '聊天记录',
     theme: '主题',
     language: '语言',

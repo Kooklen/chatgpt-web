@@ -86,10 +86,12 @@ async function chatReplyProcess(options: RequestOptions) {
         options = { ...lastContext }
     }
 
-    if (model === 'gpt-4') {
+    if (model === 'gpt-4')
       use_model = 'gpt-4'
-      initializeAPI()
-    }
+    else
+      use_model = ''
+
+    initializeAPI()
 
     const response = await api.sendMessage(message, {
       ...options,

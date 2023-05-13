@@ -2,9 +2,11 @@
 import { computed, reactive, ref } from 'vue'
 import type { FormInst, FormItemInst, FormItemRule, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, useNotification } from 'naive-ui'
+import { useRouter } from 'vue-router'
 import axios from '@/utils/request/axios'
 import { debounce } from '@/utils/functions/debounce'
 const notification = useNotification()
+const router = useRouter()
 const loginForm = reactive({
   email: '',
   password: '',
@@ -17,9 +19,10 @@ const isReadyLogin = computed(
   () => loginForm.email && loginForm.password.length >= 6,
 )
 
-const debouncedHandleLogin = debounce(handleLogin, 2000)
+const debouncedHandleLogin = debounce(handleLogin, 0)
 
 const loginStatus = ref(true)
+const isSubmitting = ref(false)
 
 function submitLogin() {
   if (loginStatus.value) {
@@ -41,16 +44,17 @@ function submitLogin() {
             content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：AIworlds.cc',
             duration: 10000,
           })
-					notification.success({
-						content: 'chatgpt4.0模型已经上线',
-						duration: 10000,
-					})
+          notification.success({
+            content: 'chatgpt4.0模型已经上线, 添加客服微信参与抽奖体验使用',
+            duration: 10000,
+          })
           window.location.href = '#/chat'
         }
         else {
           notification.error({
             content: response.data.message === 'Invalid password' ? '无效的账号或者密码' : response.data.message,
           })
+          isSubmitting.value = false
         }
       })
       .catch((error) => {
@@ -70,12 +74,13 @@ function submitLogin() {
           const token = response.data.token
           localStorage.setItem('token', token)
           // 跳转到主页
-          window.location.href = '#/chat'
+          router.replace('#/chat')
         }
         else {
           notification.error({
             content: response.data.message === 'User already exists' ? '用户已经注册' : response.data.message,
           })
+          isSubmitting.value = false
         }
       })
       .catch((error) => {
@@ -86,6 +91,7 @@ function submitLogin() {
 }
 
 function handleLogin() {
+  isSubmitting.value = true
   submitLogin()
 }
 
@@ -202,15 +208,17 @@ function handlePasswordInput() {
 
       <div class="btn">
         <NButton
-          v-if="loginStatus" :disabled="!isReadyLogin"
-          class="submit" @click="debouncedHandleLogin"
+          v-if="loginStatus" :disabled="isSubmitting || !isReadyLogin" :loading="isSubmitting"
+          class="submit" :class="{ 'submit-disabed': isSubmitting }" @click="debouncedHandleLogin"
         >
           登录
         </NButton>
         <NButton
           v-else
           class="submit"
-          :disabled="!isReadyLogin"
+          :loading="isSubmitting"
+          :disabled="isSubmitting || !isReadyLogin"
+          :class="{ 'submit-disabed': isSubmitting }"
           @click="debouncedHandleLogin"
         >
           注册
@@ -415,4 +423,7 @@ function handlePasswordInput() {
 		margin-top: 0!important;
 	}
 }
+//.submit-disabed{
+//	background-color: white!important;
+//}
 </style>

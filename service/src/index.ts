@@ -25,12 +25,25 @@ app.all('*', (_, res, next) => {
 
 const privateKey = 'your_private_key_here'
 
+function validateEmail(email) {
+  const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+  return re.test(String(email).toLowerCase())
+}
+
 router.post('/register', async (req, res) => {
   try {
     const { email, password, invitationCode } = req.body
     // 验证 email 和 password 是否合法
     if (!email || !password)
       throw new Error('Invalid email or password')
+
+    // 验证 email 是否合法
+    if (!email || !validateEmail(email))
+      throw new Error('Invalid email')
+
+    // 验证 password 是否合法
+    if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
+      throw new Error('Invalid password')
 
     // 如果有邀请码，则检查邀请码是否合法
     if (invitationCode) {
@@ -91,8 +104,12 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
     // 验证 email 和 password 是否合法
-    if (!email || !password)
-      throw new Error('Invalid email or password')
+    // 验证 email 和 password 是否合法
+    if (!email || !validateEmail(email))
+      throw new Error('Invalid email')
+
+    if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
+      throw new Error('Invalid password')
 
     // 检查数据库中是否存在该用户
     const [user] = await executeQuery(

@@ -67,8 +67,16 @@ dataSources.value.forEach((item, index) => {
     updateChatSome(+uuid, index, { loading: false })
 })
 
+// 在页面加载时，从本地存储中获取模型
+onMounted(() => {
+  const savedModel = localStorage.getItem(`selectedModel-${uuid}`)
+  if (savedModel)
+    model.value = savedModel
+})
+
 function handleSubmit() {
   onConversation()
+  localStorage.setItem(`selectedModel-${uuid}`, model.value)
 }
 
 async function onConversation() {
@@ -508,6 +516,12 @@ onUnmounted(() => {
             </div>
           </template>
           <template v-else>
+            <span v-if="model === 'gpt-4'" class="model-type" style="color: #42adff">
+              Model: GPT-4
+            </span>
+            <span v-else class="model-type">
+              Model: GPT-3.5
+            </span>
             <div>
               <Message
                 v-for="(item, index) of dataSources"
@@ -580,8 +594,17 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style>
+<style lang="less">
 	.history-normal{
 		color: #42adff;
+	}
+
+	.model-type{
+		font-size: 14px;
+		color: rgb(142,142,160,0.8);
+		margin-left: auto;
+		display:inline-block;
+		width: 100%;
+		text-align: center;
 	}
 </style>
