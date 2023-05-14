@@ -47,23 +47,33 @@ const sendEmail = async (email, code, accessToken) => {
 
 router.post('/verify-email', async (req, res) => {
   try {
-    const { email } = req.body
+    const { email, type } = req.body
 
     // 验证 email 是否合法
     if (!email || !validateEmail(email))
       throw new Error('Invalid email')
 
-    // 检查数据库中是否已经存在该用户
-    const [user] = await executeQuery(
-      'SELECT * FROM users WHERE email = ?',
-      [email],
-    )
-    if (user)
-      throw new Error('User already exists')
+    if (!type) {
+      // 检查数据库中是否已经存在该用户
+      const [user] = await executeQuery(
+        'SELECT * FROM users WHERE email = ?',
+        [email],
+      )
+      if (user)
+        throw new Error('用户已经注册')
+    }
+    else {
+      const [user] = await executeQuery(
+        'SELECT * FROM users WHERE email = ?',
+        [email],
+      )
+      if (!user)
+        throw new Error('用户不存在')
+    }
 
     // 检查是否已经生成了验证码并且还在有效期内
     let code = await client.get(email)
-    if (code) {
+    if (code && !type) {
       // 如果验证码存在，直接返回成功信息
       res.send({ status: 'success', message: '确认邮件已经发送，请稍等再试。' })
       return
@@ -86,13 +96,69 @@ router.post('/verify-email', async (req, res) => {
 
     // 发送验证码邮件
     const response = await sendEmail(email, code, accessToken)
-    console.log(response)
+    if (response) {
+      // 获取当前时间
+      const send_time = new Date()
+      // 插入到数据库中
+      await executeQuery(
+        'INSERT INTO send_email (email, send_time, status) VALUES (?, ?, ?)',
+        [email, send_time, response.data.errmsg],
+      )
+    }
 
-    // 将验证码存储到 Redis，设置过期时间为 1 分钟
-    await client.set(`${email}_code`, code, 'EX', 60)
+    // 将验证码存储到 Redis，设置过期时间为5分钟
+    if (type)
+      await client.set(`${email}_token`, code, 'EX', 300)
+
+    else
+      await client.set(`${email}_code`, code, 'EX', 300)
 
     // 返回成功信息
     res.send({ status: 'success', message: '邮件已经发送，请检查您的邮箱' })
+  }
+  catch (error) {
+    res.send({ status: 'fail', message: error.message })
+  }
+})
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, password, emailCode } = req.body
+
+    if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
+      throw new Error('无效的密码')
+
+    const [user] = await executeQuery(
+      'SELECT * FROM users WHERE email = ?',
+      [email],
+    )
+    if (!user)
+      throw new Error('用户不存在')
+
+    // 验证验证码是否正确
+    const storedEmailCode = await client.get(`${email}_token`)
+    if (!storedEmailCode || emailCode !== storedEmailCode)
+      throw new Error('无效的邮箱验证码')
+    client.del(`${email}_token`)
+
+    const saltRounds = 10
+    const hash = await bcrypt.hash(password, saltRounds)
+
+    await executeQuery(
+      'UPDATE users SET password = ? WHERE email = ?',
+      [hash, email],
+    )
+
+    // res.send({ status: 'success', message: '密码更改成功，就返回重新登录' })
+    // 生成一个新的 token 并将其存储到 Redis 中
+    const token = jwt.sign({ email }, privateKey)
+    await client.set(email, token, 'EX', 36000, (err, reply) => {
+      if (err)
+        throw new Error(err)
+    })
+    // 设置 cookie，有效期为 1 小时
+    res.cookie('token', token, { maxAge: 3600 * 10000 })
+    res.send({ status: 'success', token })
   }
   catch (error) {
     res.send({ status: 'fail', message: error.message })
@@ -115,10 +181,10 @@ router.post('/register', async (req, res) => {
       throw new Error('无效的密码')
 
     // 验证验证码是否正确
-    // const storedEmailCode = await client.get(`${email}_emailCode`)
     const storedEmailCode = await client.get(`${email}_code`)
     if (!storedEmailCode || emailCode !== storedEmailCode)
       throw new Error('无效的邮箱验证码')
+    client.del(`${email}_code`)
 
     // 如果有邀请码，则检查邀请码是否合法
     if (invitationCode) {

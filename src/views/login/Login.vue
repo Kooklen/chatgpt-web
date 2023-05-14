@@ -5,6 +5,7 @@ import { NButton, NForm, NFormItem, NInput, useNotification } from 'naive-ui'
 import axios from '@/utils/request/axios'
 import { debounce } from '@/utils/functions/debounce'
 const notification = useNotification()
+const findPwd = ref(false)
 const loginForm = reactive({
   email: '',
   password: '',
@@ -22,7 +23,6 @@ const debouncedHandleLogin = debounce(handleLogin, 0)
 
 const loginStatus = ref(true)
 const isSubmitting = ref(false)
-const sentEmailCode = ref(false)
 
 function submitLogin() {
   if (loginStatus.value) {
@@ -35,24 +35,13 @@ function submitLogin() {
         if (response.data.status === 'success') {
           const token = response.data.token
           localStorage.setItem('token', token)
-          // 跳转到主页
           window.location.href = '#/chat'
-          notification.success({
-            content: loginStatus.value ? '登录成功' : '注册成功',
-            duration: 3000,
-          })
-          notification.success({
-            content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：AIworlds.cc',
-            duration: 10000,
-          })
-          notification.success({
-            content: 'chatgpt4.0模型已经上线, 添加客服微信参与抽奖体验使用',
-            duration: 10000,
-          })
+          newInfor()
         }
         else {
           notification.error({
             content: response.data.message === 'Invalid password' ? '无效的账号或者密码' : response.data.message,
+            duration: 5000,
           })
           isSubmitting.value = false
         }
@@ -71,7 +60,10 @@ function submitLogin() {
     })
       .then((response) => {
         if (response.data.status === 'success') {
-          // 登录成功，保存 token
+          notification.success({
+            content: '注册成功',
+            duration: 5000,
+          })
           const token = response.data.token
           localStorage.setItem('token', token)
           // 跳转到主页
@@ -80,6 +72,7 @@ function submitLogin() {
         else {
           notification.error({
             content: response.data.message === 'User already exists' ? '用户已经注册' : response.data.message,
+            duration: 5000,
           })
           isSubmitting.value = false
         }
@@ -92,6 +85,7 @@ function submitLogin() {
 }
 
 const countdown = ref(60)
+const isLoading = ref(false) // 新的状态变量
 let timerId: any = null
 
 function startCountdown() {
@@ -101,42 +95,96 @@ function startCountdown() {
       countdown.value--
     }
     else {
+      isLoading.value = false
       clearInterval(timerId)
       countdown.value = 60
     }
   }, 1000)
 }
 
+function newInfor() {
+  notification.success({
+    content: loginStatus.value ? '登录成功' : '注册成功',
+    duration: 3000,
+  })
+  notification.success({
+    content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：AIworlds.cc',
+    duration: 10000,
+  })
+  notification.success({
+    content: 'chatgpt4.0模型已经上线, 添加客服微信参与抽奖体验使用',
+    duration: 10000,
+  })
+}
+
 function getEmailCode() {
-  // 获取用户输入的邮箱
   const email = loginForm.email
-  sentEmailCode.value = true
-  // 发送请求到 '/verify-email' 端点
-  axios.post('/verify-email', { email })
+  const type = findPwd.value ? 'findPwd' : ''
+  isLoading.value = true
+
+  axios.post('/verify-email', { email, type })
     .then((response) => {
       if (response.data.status === 'success') {
         // 验证码邮件发送成功，显示成功信息
         notification.success({
           content: response.data.message,
+          duration: 5000,
         })
         startCountdown()
-        setTimeout(() => {
-          sentEmailCode.value = false
-        }, 60000)
       }
       else {
         // 发生错误，显示错误信息
         notification.error({
           content: response.data.message,
+          duration: 5000,
         })
+        isLoading.value = false
+        countdown.value = 60
+        clearInterval(timerId) // 发生错误，清除计时器
       }
     })
     .catch((error) => {
-      sentEmailCode.value = false
+      isLoading.value = false
+      countdown.value = 60
+      clearInterval(timerId) // 发生错误，清除计时器
+
       // 发生错误，显示错误信息
-      console.error(error)
       notification.error({
         content: 'An error occurred while sending the verification email.',
+        duration: 5000,
+      })
+    })
+}
+
+function resetPwd() {
+  isLoading.value = true
+
+  axios.post('/reset-password', {
+    email: loginForm.email,
+    password: loginForm.password,
+    emailCode: loginForm.emailCode,
+  })
+    .then((response) => {
+      if (response.data.status === 'success') {
+        const token = response.data.token
+        localStorage.setItem('token', token)
+        window.location.href = '#/chat'
+        newInfor()
+      }
+      else {
+        notification.error({
+          content: response.data.message,
+          duration: 5000,
+        })
+        isLoading.value = false
+      }
+    })
+    .catch((error) => {
+      isLoading.value = false
+      // 发生错误，显示错误信息
+      notification.error({
+        content: 'An error occurred while sending the verification email.',
+        duration: 5000,
       })
     })
 }
@@ -250,7 +298,7 @@ function handlePasswordInput() {
           <NFormItem path="email" label="邮箱">
             <NInput v-model:value="loginForm.email" size="large" @keydown.enter.prevent />
           </NFormItem>
-          <NFormItem v-if="!loginStatus" path="emailCode" label="邮箱验证码">
+          <NFormItem v-if="!loginStatus || findPwd" path="emailCode" label="邮箱验证码">
             <NInput
               v-model:value="loginForm.emailCode"
               size="large"
@@ -268,7 +316,7 @@ function handlePasswordInput() {
               @keydown.enter.prevent
             />
           </NFormItem>
-          <NFormItem v-if="!loginStatus" path="invitationCode" label="邀请码">
+          <NFormItem v-if="!loginStatus && !findPwd" path="invitationCode" label="邀请码">
             <NInput
               v-model:value="loginForm.invitationCode"
               placeholder="邀请码（可选）"
@@ -281,21 +329,31 @@ function handlePasswordInput() {
 
       <div class="btn">
         <NButton
-          v-if="loginStatus" :disabled="isSubmitting || !isReadyLogin" :loading="isSubmitting"
+          v-if="loginStatus && !findPwd" :disabled="isSubmitting || !isReadyLogin" :loading="isSubmitting"
           class="submit" :class="{ 'submit-disabed': isSubmitting }" @click="debouncedHandleLogin"
         >
           登录
         </NButton>
+
         <NButton
-          v-if="!loginStatus"
+          v-if="!loginStatus || findPwd"
           class="get-code"
-          :disabled="sentEmailCode"
+          :disabled="isLoading"
           @click="getEmailCode"
         >
           {{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
         </NButton>
+
         <NButton
-          v-if="!loginStatus"
+          v-if="findPwd"
+          class="submit"
+          @click="resetPwd"
+        >
+          重设密码并登录
+        </NButton>
+
+        <NButton
+          v-if="!loginStatus && !findPwd"
           class="submit"
           :loading="isSubmitting"
           :disabled="isSubmitting || !isReadyLogin"
@@ -305,14 +363,20 @@ function handlePasswordInput() {
           注册
         </NButton>
 
-        <div v-if="loginStatus" class="register">
+        <div v-if="loginStatus && !findPwd" class="register">
           <span class="no-account">还没有账号？</span>
           <span class="go-to-r" @click="loginStatus = false">马上注册</span>
         </div>
 
-        <div v-if="!loginStatus" class="register">
+        <div v-if="!loginStatus && !findPwd" class="register">
           <span class="no-account">已经有账号？</span>
           <span class="go-to-r" @click="loginStatus = true">马上登录</span>
+        </div>
+        <div v-if="!findPwd" class="register find-pwd" @click="findPwd = true">
+          找回密码
+        </div>
+        <div v-else class="find-pwd" @click="findPwd = false">
+          返回登录
         </div>
       </div>
     </div>
@@ -438,6 +502,14 @@ function handlePasswordInput() {
 				cursor: pointer;
 				color: rgb(66, 173, 255);
 			}
+		}
+		.find-pwd{
+			width: 100%;
+			text-align: center;
+			margin-top: 10px;
+			cursor: pointer;
+			font-size: 12px;
+			color: #737373;
 		}
 	}
 }
