@@ -2,15 +2,14 @@
 import { computed, reactive, ref } from 'vue'
 import type { FormInst, FormItemInst, FormItemRule, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, useNotification } from 'naive-ui'
-import { useRouter } from 'vue-router'
 import axios from '@/utils/request/axios'
 import { debounce } from '@/utils/functions/debounce'
 const notification = useNotification()
-const router = useRouter()
 const loginForm = reactive({
   email: '',
   password: '',
   invitationCode: '',
+  emailCode: '',
 })
 
 localStorage.removeItem('token')
@@ -23,6 +22,7 @@ const debouncedHandleLogin = debounce(handleLogin, 0)
 
 const loginStatus = ref(true)
 const isSubmitting = ref(false)
+const sentEmailCode = ref(false)
 
 function submitLogin() {
   if (loginStatus.value) {
@@ -36,6 +36,7 @@ function submitLogin() {
           const token = response.data.token
           localStorage.setItem('token', token)
           // 跳转到主页
+          window.location.href = '#/chat'
           notification.success({
             content: loginStatus.value ? '登录成功' : '注册成功',
             duration: 3000,
@@ -48,7 +49,6 @@ function submitLogin() {
             content: 'chatgpt4.0模型已经上线, 添加客服微信参与抽奖体验使用',
             duration: 10000,
           })
-          window.location.href = '#/chat'
         }
         else {
           notification.error({
@@ -67,6 +67,7 @@ function submitLogin() {
       email: loginForm.email,
       password: loginForm.password,
       invitationCode: loginForm.invitationCode ? loginForm.invitationCode : undefined,
+    	emailCode: loginForm.emailCode,
     })
       .then((response) => {
         if (response.data.status === 'success') {
@@ -74,7 +75,7 @@ function submitLogin() {
           const token = response.data.token
           localStorage.setItem('token', token)
           // 跳转到主页
-          router.replace('#/chat')
+          window.location.href = '#/chat'
         }
         else {
           notification.error({
@@ -88,6 +89,56 @@ function submitLogin() {
         console.error(error)
       })
   }
+}
+
+const countdown = ref(60)
+let timerId: any = null
+
+function startCountdown() {
+  countdown.value = 60
+  timerId = setInterval(() => {
+    if (countdown.value > 0) {
+      countdown.value--
+    }
+    else {
+      clearInterval(timerId)
+      countdown.value = 60
+    }
+  }, 1000)
+}
+
+function getEmailCode() {
+  // 获取用户输入的邮箱
+  const email = loginForm.email
+  sentEmailCode.value = true
+  // 发送请求到 '/verify-email' 端点
+  axios.post('/verify-email', { email })
+    .then((response) => {
+      if (response.data.status === 'success') {
+        // 验证码邮件发送成功，显示成功信息
+        notification.success({
+          content: response.data.message,
+        })
+        startCountdown()
+        setTimeout(() => {
+          sentEmailCode.value = false
+        }, 60000)
+      }
+      else {
+        // 发生错误，显示错误信息
+        notification.error({
+          content: response.data.message,
+        })
+      }
+    })
+    .catch((error) => {
+      sentEmailCode.value = false
+      // 发生错误，显示错误信息
+      console.error(error)
+      notification.error({
+        content: 'An error occurred while sending the verification email.',
+      })
+    })
 }
 
 function handleLogin() {
@@ -153,6 +204,20 @@ const rules: FormRules = {
       trigger: ['input', 'blur'],
     },
   ],
+  emailCode: [
+    {
+      required: true,
+      validator(rule: FormItemRule, value: string) {
+        if (value && value.length !== 6)
+          return new Error('邮箱验证码需要为6位数字')
+        else if (value && !/^\d{6}$/.test(value))
+          return new Error('邮箱验证码必须是6位数字')
+
+        return true
+      },
+      trigger: ['input', 'blur'],
+    },
+  ],
 
 }
 function handlePasswordInput() {
@@ -185,6 +250,14 @@ function handlePasswordInput() {
           <NFormItem path="email" label="邮箱">
             <NInput v-model:value="loginForm.email" size="large" @keydown.enter.prevent />
           </NFormItem>
+          <NFormItem v-if="!loginStatus" path="emailCode" label="邮箱验证码">
+            <NInput
+              v-model:value="loginForm.emailCode"
+              size="large"
+              max-length="6"
+              @keydown.enter.prevent
+            />
+          </NFormItem>
           <NFormItem path="password" label="密码">
             <NInput
               v-model:value="loginForm.password"
@@ -214,7 +287,15 @@ function handlePasswordInput() {
           登录
         </NButton>
         <NButton
-          v-else
+          v-if="!loginStatus"
+          class="get-code"
+          :disabled="sentEmailCode"
+          @click="getEmailCode"
+        >
+          {{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
+        </NButton>
+        <NButton
+          v-if="!loginStatus"
           class="submit"
           :loading="isSubmitting"
           :disabled="isSubmitting || !isReadyLogin"
@@ -281,7 +362,7 @@ function handlePasswordInput() {
 	overflow-y: auto;
 	background-color: #fff;
 	.logo{
-		margin-top: 10vh;
+		margin-top: 8vh;
 		.logo-pic{
 			z-index: 20;
 			width: 8vw;
@@ -336,6 +417,10 @@ function handlePasswordInput() {
 			&:hover{
 				color: white;
 			}
+		}
+		.get-code{
+			background: linear-gradient(180deg, #FFFFFF 0%, #F6F6F6 100%);
+			margin-bottom: 20px;
 		}
 		.register{
 			margin-top: 22px;

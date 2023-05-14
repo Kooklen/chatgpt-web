@@ -1,6 +1,7 @@
 import express from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import axios from 'axios'
 import type { RequestProps } from './types'
 import type { ChatMessage } from './chatgpt'
 import { chatConfig, chatReplyProcess, currentModel } from './chatgpt'
@@ -30,30 +31,27 @@ function validateEmail(email) {
   return re.test(String(email).toLowerCase())
 }
 
-router.post('/register', async (req, res) => {
+// Updated sendEmail function to accept access token as parameter
+const sendEmail = async (email, code, accessToken) => {
+  const sendEmailURL = 'https://qyapi.weixin.qq.com/cgi-bin/exmail/app/compose_send?access_token='
+  const response = await axios.post(sendEmailURL + accessToken, {
+    to: {
+      emails: [email],
+    },
+    subject: '您的验证码为',
+    content: code,
+  })
+
+  return response
+}
+
+router.post('/verify-email', async (req, res) => {
   try {
-    const { email, password, invitationCode } = req.body
-    // 验证 email 和 password 是否合法
-    if (!email || !password)
-      throw new Error('Invalid email or password')
+    const { email } = req.body
 
     // 验证 email 是否合法
     if (!email || !validateEmail(email))
       throw new Error('Invalid email')
-
-    // 验证 password 是否合法
-    if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
-      throw new Error('Invalid password')
-
-    // 如果有邀请码，则检查邀请码是否合法
-    if (invitationCode) {
-      const [invitation] = await executeQuery(
-        'SELECT * FROM invitation_codes WHERE code = ?',
-        [invitationCode],
-      )
-      if (!invitation)
-        throw new Error('Invalid invitation code')
-    }
 
     // 检查数据库中是否已经存在该用户
     const [user] = await executeQuery(
@@ -62,6 +60,83 @@ router.post('/register', async (req, res) => {
     )
     if (user)
       throw new Error('User already exists')
+
+    // 检查是否已经生成了验证码并且还在有效期内
+    let code = await client.get(email)
+    if (code) {
+      // 如果验证码存在，直接返回成功信息
+      res.send({ status: 'success', message: '确认邮件已经发送，请稍等再试。' })
+      return
+    }
+
+    // 如果不存在，生成新的验证码
+    code = Math.floor(100000 + Math.random() * 900000).toString() // Generate a random 6-digit number
+
+    // 从 Redis 获取 access token
+    let accessToken = await client.get('access_token')
+    if (!accessToken) {
+      // 如果 Redis 中没有 access token，则发送请求获取新的 access token
+      const tokenURL = 'https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=wwbc3ee2aa737a64de&corpsecret=P5zyzGJi0WQuRbMLsj94mQq_0IB7rPt_DHhEUWbqr3M'
+      const response = await axios.get(tokenURL)
+      accessToken = response.data.access_token
+
+      // 将新的 access token 存储到 Redis，设置过期时间为 7000 秒
+      await client.set('access_token', accessToken, 'EX', 7000)
+    }
+
+    // 发送验证码邮件
+    const response = await sendEmail(email, code, accessToken)
+    console.log(response)
+
+    // 将验证码存储到 Redis，设置过期时间为 1 分钟
+    await client.set(`${email}_code`, code, 'EX', 60)
+
+    // 返回成功信息
+    res.send({ status: 'success', message: '邮件已经发送，请检查您的邮箱' })
+  }
+  catch (error) {
+    res.send({ status: 'fail', message: error.message })
+  }
+})
+
+router.post('/register', async (req, res) => {
+  try {
+    const { email, password, invitationCode, emailCode } = req.body
+    // 验证 email 和 password 是否合法
+    if (!email || !password)
+      throw new Error('无效的邮箱或者密码')
+
+    // 验证 email 是否合法
+    if (!email || !validateEmail(email))
+      throw new Error('无效的邮箱')
+
+    // 验证 password 是否合法
+    if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
+      throw new Error('无效的密码')
+
+    // 验证验证码是否正确
+    // const storedEmailCode = await client.get(`${email}_emailCode`)
+    const storedEmailCode = await client.get(`${email}_code`)
+    if (!storedEmailCode || emailCode !== storedEmailCode)
+      throw new Error('无效的邮箱验证码')
+
+    // 如果有邀请码，则检查邀请码是否合法
+    if (invitationCode) {
+      const [invitation] = await executeQuery(
+        'SELECT * FROM invitation_codes WHERE code = ?',
+        [invitationCode],
+      )
+      if (!invitation)
+        throw new Error('无效的邀请码')
+    }
+
+    // 检查数据库中是否已经存在该用户
+    const [user] = await executeQuery(
+      'SELECT * FROM users WHERE email = ?',
+      [email],
+    )
+    if (user)
+      throw new Error('用户已经存在')
 
     // 使用 bcrypt 对密码进行加密
     const saltRounds = 10
@@ -104,12 +179,11 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
     // 验证 email 和 password 是否合法
-    // 验证 email 和 password 是否合法
     if (!email || !validateEmail(email))
-      throw new Error('Invalid email')
+      throw new Error('无效的邮箱')
 
     if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
-      throw new Error('Invalid password')
+      throw new Error('无效的密码')
 
     // 检查数据库中是否存在该用户
     const [user] = await executeQuery(
@@ -117,12 +191,12 @@ router.post('/login', async (req, res) => {
       [email],
     )
     if (!user)
-      throw new Error('User not found')
+      throw new Error('用户无法找到')
 
     // 使用 bcrypt 验证密码是否匹配
     const match = await bcrypt.compare(password, user.password)
     if (!match)
-      throw new Error('Invalid password')
+      throw new Error('无效的密码')
 
     client.get(email, async (err, reply) => {
       if (err)
