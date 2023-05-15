@@ -60,10 +60,7 @@ function submitLogin() {
     })
       .then((response) => {
         if (response.data.status === 'success') {
-          notification.success({
-            content: '注册成功',
-            duration: 5000,
-          })
+          newInfor()
           const token = response.data.token
           localStorage.setItem('token', token)
           // 跳转到主页

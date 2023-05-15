@@ -365,11 +365,12 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
     const token = authorizationHeader.replace('Bearer ', '')
     const decodedToken = jwt.verify(token, privateKey)
     const userEmail = decodedToken.email
+    const curModel = model || 'gpt-3.5'
     if (userEmail && prompt) {
       const truncatedPrompt = prompt.slice(0, 255)
       await executeQuery(
-        'INSERT INTO search_history (user_email, keyword) VALUES (?, ?)',
-        [userEmail, truncatedPrompt],
+        'INSERT INTO search_history (user_email, keyword, model) VALUES (?, ?, ?)',
+        [userEmail, truncatedPrompt, curModel],
       )
     }
 

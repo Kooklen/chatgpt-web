@@ -587,7 +587,7 @@ onUnmounted(() => {
               </span>
             </template>
           </NButton>
-          <NSelect v-show="!dataSources.length" v-model:value="model" :options="options" style="width: 150px;" />
+          <NSelect v-model:value="model" :options="options" style="width: 150px;" />
         </div>
       </div>
     </footer>
