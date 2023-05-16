@@ -26,6 +26,17 @@ app.all('*', (_, res, next) => {
 
 const privateKey = 'your_private_key_here'
 
+async function getIpLocation(ip) {
+  try {
+    const response = await axios.get(`http://ip-api.com/json/${ip}`)
+    return `${response.data.country}, ${response.data.city}`
+  }
+  catch (error) {
+    console.error(error)
+    return null
+  }
+}
+
 function validateEmail(email) {
   const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
   return re.test(String(email).toLowerCase())
@@ -365,14 +376,6 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
     const token = authorizationHeader.replace('Bearer ', '')
     const decodedToken = jwt.verify(token, privateKey)
     const userEmail = decodedToken.email
-    const curModel = model || 'gpt-3.5'
-    if (userEmail && prompt) {
-      const truncatedPrompt = prompt.slice(0, 255)
-      await executeQuery(
-        'INSERT INTO search_history (user_email, keyword, model) VALUES (?, ?, ?)',
-        [userEmail, truncatedPrompt, curModel],
-      )
-    }
 
     if (model === 'gpt-4') {
       const today = new Date()
@@ -392,6 +395,29 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
         res.end()
         return
       }
+    }
+
+    const curModel = model || 'gpt-3.5'
+    if (userEmail && prompt) {
+      const truncatedPrompt = prompt.slice(0, 255)
+      await executeQuery(
+        'INSERT INTO search_history (user_email, keyword, model) VALUES (?, ?, ?)',
+        [userEmail, truncatedPrompt, curModel],
+      )
+
+      // 获取用户IP地址和归属地
+      // 注意：在实际环境中，你可能需要使用其他方式来获取真实的用户IP和归属地，因为req.ip可能会被代理服务器修改
+      const lastUsedIP = req.ip
+      const lastUsedIPFrom = await getIpLocation(lastUsedIP) // 使用你选择的IP归属地查询服务
+
+      // 获取当前时间
+      const lastUsedTime = new Date()
+
+      // 更新数据库
+      await executeQuery(
+        'UPDATE users SET lastUsedIP = ?, lastUsedIPFrom = ?, lastUsedTime = ? WHERE email = ?',
+        [lastUsedIP, lastUsedIPFrom, lastUsedTime, userEmail],
+      )
     }
 
     await chatReplyProcess({
