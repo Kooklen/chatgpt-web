@@ -16,7 +16,7 @@ const routes: RouteRecordRaw[] = [
       }],
   },
   {
-    path: '/login',
+		path: '/login/:invitationCode?',
     component: () => import('@/views/login/Login.vue'),
   },
 

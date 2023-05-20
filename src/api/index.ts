@@ -38,6 +38,13 @@ export function fetchChatAPIProcess<T = any>(
   })
 }
 
+export function fetchUserInfo<T>(token: string) {
+  return post<T>({
+    url: '/user-info',
+    data: { token },
+  })
+}
+
 export function fetchSession<T>() {
   return post<T>({
     url: '/session',

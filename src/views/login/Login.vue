@@ -1,7 +1,8 @@
 <script lang="ts" setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInst, FormItemInst, FormItemRule, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, useNotification } from 'naive-ui'
+import { useRoute } from 'vue-router'
 import axios from '@/utils/request/axios'
 import { debounce } from '@/utils/functions/debounce'
 const notification = useNotification()
@@ -12,6 +13,16 @@ const loginForm = reactive({
   invitationCode: '',
   emailCode: '',
 })
+const route = useRoute()
+const loginStatus = ref(true)
+const isSubmitting = ref(false)
+onMounted(() => {
+  if (route.params.invitationCode) {
+    // @ts-expect-error
+    loginForm.invitationCode = route.params.invitationCode
+    loginStatus.value = false
+  }
+})
 
 localStorage.removeItem('token')
 
@@ -20,9 +31,6 @@ const isReadyLogin = computed(
 )
 
 const debouncedHandleLogin = debounce(handleLogin, 0)
-
-const loginStatus = ref(true)
-const isSubmitting = ref(false)
 
 function submitLogin() {
   if (loginStatus.value) {
@@ -56,7 +64,7 @@ function submitLogin() {
       email: loginForm.email,
       password: loginForm.password,
       invitationCode: loginForm.invitationCode ? loginForm.invitationCode : undefined,
-    	emailCode: loginForm.emailCode,
+    	emailCode: loginForm.emailCode.trim(),
     })
       .then((response) => {
         if (response.data.status === 'success') {
@@ -109,7 +117,7 @@ function newInfor() {
     duration: 10000,
   })
   notification.success({
-    content: 'chatgpt4.0模型已经上线, 添加客服微信参与抽奖体验使用',
+    content: 'chatgpt4.0模型已经上线, 邀请新用户就可以体验使用！详情请见左侧菜单栏',
     duration: 10000,
   })
 }
@@ -239,10 +247,10 @@ const rules: FormRules = {
   invitationCode: [
     {
       validator(rule: FormItemRule, value: string) {
-        if (value && value.length !== 6)
-          return new Error('邀请码需要为6位数字')
-				 else if (value && !/^\d{6}$/.test(value))
-          return new Error('邀请码必须是6位数字')
+        if (value && value.length !== 8)
+          return new Error('邀请码需要为8位')
+				 // else if (value && !/^\d{6}$/.test(value))
+        //  return new Error('邀请码必须是6位数字')
 
         return true
       },
