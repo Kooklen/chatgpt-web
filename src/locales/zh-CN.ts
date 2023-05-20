@@ -74,6 +74,7 @@ export default {
     balance: 'API余额',
   },
   store: {
+    updateGpt4: '升级GPT4',
     invite: '邀请新用户',
     feedbackBug: '联系我们',
     supportMe: '支持一下',

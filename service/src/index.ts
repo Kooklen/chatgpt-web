@@ -9,6 +9,8 @@ import { auth } from './middleware/auth'
 import { limiter } from './middleware/limiter'
 import { isNotEmptyString } from './utils/is'
 import { client } from './redis'
+const crypto = require('crypto')
+const FormData = require('form-data')
 const { executeQuery } = require('./models/database')
 
 const app = express()
@@ -32,7 +34,6 @@ async function getIpLocation(ip) {
     return `${response.data.country}, ${response.data.city}`
   }
   catch (error) {
-    console.error(error)
     return null
   }
 }
@@ -197,14 +198,38 @@ router.post('/register', async (req, res) => {
       throw new Error('无效的邮箱验证码')
     client.del(`${email}_code`)
 
-    // 如果有邀请码，则检查邀请码是否合法
     if (invitationCode) {
-      const [invitation] = await executeQuery(
-        'SELECT * FROM invitation_codes WHERE code = ?',
+      // 检查邀请码是否存在并且获取推荐人的邮箱
+      const [inviter] = await executeQuery(
+        'SELECT * FROM users WHERE invitation_code = ?',
         [invitationCode],
       )
-      if (!invitation)
+      if (!inviter)
         throw new Error('无效的邀请码')
+
+      // 将一级推荐关系存入referrals表
+      await executeQuery(
+        'INSERT INTO referrals (referrer_email, referred_email, level) VALUES (?, ?, ?)',
+        [inviter.email, email, 1],
+      )
+
+      // 更新推荐人的membership_times
+      await executeQuery(
+        'UPDATE users SET membership_times = membership_times + 10 WHERE email = ?',
+        [inviter.email],
+      )
+
+      // 查找推荐人的推荐人，如果存在且是代理人则将二级推荐关系存入referrals表
+      const [inviterReferrer] = await executeQuery(
+        'SELECT referrer_email FROM referrals INNER JOIN users ON referrals.referrer_email = users.email WHERE referred_email = ? AND level = 1 AND users.user_type = "agent"',
+        [inviter.email],
+      )
+      if (inviterReferrer) {
+        await executeQuery(
+          'INSERT INTO referrals (referrer_email, referred_email, level) VALUES (?, ?, ?)',
+          [inviterReferrer.referrer_email, email, 2],
+        )
+      }
     }
 
     // 检查数据库中是否已经存在该用户
@@ -220,9 +245,15 @@ router.post('/register', async (req, res) => {
     const hash = await bcrypt.hash(password, saltRounds)
     // 将加密后的密码和 email 存入数据库，并且将当前时间作为创建时间
     const created_at = new Date()
+
+    const invitation_hash = crypto.createHash('sha256')
+    invitation_hash.update(email)
+    const fullHash = invitation_hash.digest('hex')
+    const user_invitationCode = fullHash.substring(0, 8)
+
     const result = await executeQuery(
-      'INSERT INTO users (email, password, created_at) VALUES (?, ?, ?)',
-      [email, hash, created_at],
+      'INSERT INTO users (email, password, user_type, created_at, membership_times, invitation_code) VALUES (?, ?, "user", ?, 0, ?)',
+      [email, hash, created_at, user_invitationCode],
     )
 
     // 如果有邀请码，则将邀请码存储到用户表中
@@ -380,10 +411,25 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
     if (model === 'gpt-4') {
       const today = new Date()
       const [user] = await executeQuery(
-        'SELECT * FROM users WHERE email = ? AND membership_start <= ? AND membership_end >= ?',
-        [userEmail, today, today],
+        'SELECT * FROM users WHERE email = ?',
+        [userEmail],
       )
-      if (!user) {
+
+      if (!user)
+        throw new Error('用户不存在')
+
+      if (user.membership_start <= today && user.membership_end >= today) {
+        // 用户在会员有效期内，可以使用gpt-4
+      }
+      else if (user.membership_times > 0) {
+        // 用户不在会员有效期内，但是有membership_times的额度，消耗一个membership_times
+        await executeQuery(
+          'UPDATE users SET membership_times = membership_times - 1 WHERE email = ?',
+          [userEmail],
+        )
+      }
+      else {
+        // 用户不在会员有效期内，并且没有membership_times的额度
         const customChatMessage: ChatMessage = {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
@@ -439,6 +485,45 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   }
 })
 
+router.post('/user-info', auth, async (req, res) => {
+  try {
+    // 从JWT中获取用户电子邮件
+    const authorizationHeader = req.header('Authorization')
+    const token = authorizationHeader.replace('Bearer ', '')
+    const decodedToken = jwt.verify(token, privateKey)
+    const userEmail = decodedToken.email
+
+    // 查询用户信息
+    const [user] = await executeQuery(
+      'SELECT email, invitation_code, membership_end, membership_times FROM users WHERE email = ?',
+      [userEmail],
+    )
+
+    if (!user) {
+      return res.status(404).json({
+        message: '用户不存在',
+      })
+    }
+
+    // 从数据库查询结果中提取用户信息
+    const userInfo = {
+      email: user.email,
+      invitation_code: user.invitation_code,
+      membership_end: user.membership_end,
+      membership_times: user.membership_times,
+    }
+
+    // 发送用户信息
+    res.send({ status: 'Success', message: '', data: { userInfo } })
+  }
+  catch (error) {
+    res.status(500).json({
+      message: '服务器错误',
+      error: error.message,
+    })
+  }
+})
+
 router.post('/config', async (req, res) => {
   try {
     const response = await chatConfig()
@@ -457,6 +542,160 @@ router.post('/session', async (req, res) => {
   }
   catch (error) {
     res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+
+function createSign(params, key) {
+  // Step 1: Sort the parameters by key
+  const sortedParams = Object.keys(params).sort().reduce((result, key) => {
+    if (params[key]) { // Exclude the empty parameters
+      result[key] = params[key]
+    }
+    return result
+  }, {})
+
+  // Step 2: Join the parameters into a string with '&' between them
+  let paramString = ''
+  for (const key in sortedParams) {
+    if (key !== 'sign' && key !== 'sign_type')
+      paramString += `${key}=${sortedParams[key]}&`
+  }
+
+  // Remove the trailing '&'
+  paramString = paramString.slice(0, -1)
+  // Step 3: Append the secret key and generate the md5 hash
+  paramString += key
+  const md5 = crypto.createHash('md5')
+  return md5.update(paramString).digest('hex')
+}
+
+router.post('/initiate-payment', auth, async (req, res) => {
+  const authorizationHeader = req.header('Authorization')
+  const token = authorizationHeader.replace('Bearer ', '')
+  const decodedToken = jwt.verify(token, privateKey)
+  const userEmail = decodedToken.email
+  try {
+    const pid = '20230504230028'
+    const key = '63a7PDalwyvJpEZLKRY9lv7z2BYIJruq'
+    const apiurl = 'https://7-pay.cn/mapi.php'
+    const type = 'wxpay'
+    const notify_url = 'http://www.aiworlds.cc:3002/notify'
+    const return_url = 'http://www.yourwebsite.com/return'
+    const out_trade_no = Date.now().toString()
+    const name = 'Chagpt4-单月会员'
+    const money = '30'
+    const param = ''
+    const params = {
+      pid,
+      type,
+      notify_url,
+      return_url,
+      out_trade_no,
+      name,
+      money,
+      param,
+      sign_type: 'MD5', // Add sign_type parameter
+    }
+
+    await executeQuery('INSERT INTO orders (order_no, pid, payment_type, product_name, amount, status, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+      out_trade_no,
+      pid,
+      type,
+      name,
+      money,
+      'pending',
+      userEmail,
+    ])
+
+    const sign = createSign(params, key)
+
+    const formData = new FormData()
+    Object.keys(params).forEach(key => formData.append(key, params[key]))
+    formData.append('sign', sign)
+
+    const response = await axios({
+      method: 'post',
+      url: `${apiurl}?act=order`,
+      data: formData,
+    })
+
+    // handle the response
+    if (response.data.code === '1')
+      res.send({ status: 'Success', message: '', data: response.data })
+
+    else throw new Error(response.data.msg)
+  }
+  catch (error) {
+    res.status(500).json({
+      message: '服务器错误',
+      error: error.message,
+    })
+  }
+})
+
+router.get('/notify', async (req, res) => {
+  try {
+    const { pid, name, money, out_trade_no, trade_no, param, trade_status, type, sign, sign_type } = req.query
+
+    // 在这里进行签名验证，确保这是来自支付服务商的通知
+    // 如果签名不匹配，应该抛出错误或直接返回错误响应
+
+    // 找到对应的订单记录
+    const [order] = await executeQuery(
+      'SELECT * FROM orders WHERE order_no = ?',
+      [out_trade_no],
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        message: '订单不存在',
+      })
+    }
+
+    // 判断支付状态
+    if (trade_status === 'TRADE_SUCCESS') {
+      // 如果支付成功，更新订单状态
+      await executeQuery(
+        'UPDATE orders SET status = ? WHERE order_no = ?',
+        ['paid', out_trade_no],
+      )
+
+      // Get the current user's membership end date
+      const [user] = await executeQuery(
+        'SELECT membership_end FROM users WHERE email = ?',
+        [order.user_email],
+      )
+
+      let membershipEnd
+      // If the user's membership has already expired, add one month from now
+      if (user.membership_end < new Date()) {
+        membershipEnd = new Date()
+        membershipEnd.setMonth(membershipEnd.getMonth() + 1)
+      }
+      // If the user's membership has not expired yet, add one month to the current end date
+      else {
+        membershipEnd = new Date(user.membership_end)
+        membershipEnd.setMonth(membershipEnd.getMonth() + 1)
+      }
+
+      // Update the user's membership end date
+      await executeQuery(
+        'UPDATE users SET membership_end = ? WHERE email = ?',
+        [membershipEnd, order.user_email],
+      )
+
+      // 这里可以添加其他逻辑，如给用户发送支付成功的通知等
+    }
+    else {
+      // 如果支付失败，也可以进行相应的操作
+    }
+    res.sendStatus(200)
+  }
+  catch (error) {
+    res.status(500).json({
+      message: '服务器错误',
+      error: error.message,
+    })
   }
 })
 

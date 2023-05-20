@@ -45,6 +45,13 @@ export function fetchUserInfo<T>(token: string) {
   })
 }
 
+export function fetchQrCode<T>(token: string) {
+  return post<T>({
+    url: '/initiate-payment',
+    data: { token },
+  })
+}
+
 export function fetchSession<T>() {
   return post<T>({
     url: '/session',
