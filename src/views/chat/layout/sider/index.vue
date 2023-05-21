@@ -47,7 +47,7 @@ const mobileSafeArea = computed(() => {
 const showModal = ref(false)
 const showUpgradeModal = ref(false)
 const token = ref(localStorage.getItem('token'))
-const secretKey = token.value!.trim()
+const secretKey = token.value?.trim()
 const userInfo = ref({
   email: '',
   invitation_code: '',
@@ -59,15 +59,17 @@ const qrCodeUrl = ref('')
 
 const getUserInfo = async () => {
   try {
-    const { data } = await fetchUserInfo(secretKey)
-    // @ts-expect-error
-    userInfo.value.email = data.userInfo.email
-    // @ts-expect-error
-    userInfo.value.invitation_code = data.userInfo.invitation_code
-    // @ts-expect-error
-    userInfo.value.membership_end = data.userInfo.membership_end
-    // @ts-expect-error
-    userInfo.value.membership_times = data.userInfo.membership_times
+    if (secretKey) {
+      const { data } = await fetchUserInfo(secretKey)
+      // @ts-expect-error
+      userInfo.value.email = data.userInfo.email
+      // @ts-expect-error
+      userInfo.value.invitation_code = data.userInfo.invitation_code
+      // @ts-expect-error
+      userInfo.value.membership_end = data.userInfo.membership_end
+      // @ts-expect-error
+      userInfo.value.membership_times = data.userInfo.membership_times
+    }
   }
   catch (error: any) {
     console.error(error)
@@ -81,15 +83,22 @@ const handleInvite = async () => {
   showModal.value = true
 }
 
+let pollingIntervalId: any
 const getPayQrCode = async () => {
-  qrCodeUrl.value = '正在加载微信二维码中，请稍等...'
-  const { data } = await fetchQrCode(secretKey)
-	// @ts-expect-error
-	qrCodeUrl.value = data.qrcode
+  if (secretKey) {
+    clearInterval(pollingIntervalId)
+    qrCodeUrl.value = '正在加载微信二维码中，请稍等...'
+    const { data } = await fetchQrCode(secretKey)
+    // @ts-expect-error
+    qrCodeUrl.value = data.qrcode
+
+    pollingIntervalId = setInterval(getUserInfo, 5000)
+  }
 }
 
 const clearQrCode = () => {
   qrCodeUrl.value = ''
+  clearInterval(pollingIntervalId)
 }
 
 const handleUpdateGpt4 = async () => {
@@ -163,7 +172,9 @@ watch(
       您的GPT4剩余体验次数：{{ userInfo.membership_times }}次
     </div>
     <div class="mt-5">
-      <div class="text-center">开通GPT4月度会员，享受不限次提问 <br> 50元/月(官方原价20美元/月)</div>
+      <div class="text-center">
+        开通<span style="color: #0A64FF">GPT4月度会员</span>，享受不限次提问 <br> 50元/月(官方原价20美元/月)
+      </div>
       <div class="mt-5">
         <NButton v-if="!qrCodeUrl" type="primary" block @click="getPayQrCode">
           立即开通
@@ -179,6 +190,14 @@ watch(
               支付成功后，请重新打开窗口
             </div>
           </nimage>
+          <div class="flex ml-10 mr-10" style="justify-content: space-between">
+            <NButton type="primary" size="small" @click="getPayQrCode">
+              刷新二维码
+            </NButton>
+            <NButton type="primary" size="small" @click="getUserInfo">
+              支付成功
+            </NButton>
+          </div>
         </div>
       </div>
     </div>
@@ -274,18 +293,18 @@ watch(
 	cursor: pointer;
 }
 
-  .new-btn{
-		color: #438EFF;
-		width: 100%;
-		height: 75px;
-		margin-left: 0;
-		margin-right: 0;
-		background: #FBFBFB;
-	}
-	.new-btn:hover {
-		background: #e9e9e9;
-		/*color: #438EFF;*/
-	}
+.new-btn{
+	color: #438EFF;
+	width: 100%;
+	height: 75px;
+	margin-left: 0;
+	margin-right: 0;
+	background: #FBFBFB;
+}
+.new-btn:hover {
+	background: #e9e9e9;
+	/*color: #438EFF;*/
+}
 
 .link-input {
 	word-wrap: break-word;
