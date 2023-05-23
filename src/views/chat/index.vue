@@ -42,12 +42,12 @@ const prompt = ref<string>('')
 const loading = ref<boolean>(false)
 const inputRef = ref<Ref | null>(null)
 
-const model = ref('')
+const model = ref('gpt-3.5-turbo')
 
 const options = ref([
   {
     label: '3.5模型',
-    value: '',
+    value: 'gpt-3.5-turbo',
   },
   {
     label: '4.0模型',

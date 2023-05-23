@@ -443,12 +443,11 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       }
     }
 
-    const curModel = model || 'gpt-3.5'
     if (userEmail && prompt) {
       const truncatedPrompt = prompt.slice(0, 255)
       await executeQuery(
         'INSERT INTO search_history (user_email, keyword, model) VALUES (?, ?, ?)',
-        [userEmail, truncatedPrompt, curModel],
+        [userEmail, truncatedPrompt, model],
       )
 
       // 获取用户IP地址和归属地
@@ -474,7 +473,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
         firstChunk = false
       },
       systemMessage,
-      model: model === 'gpt-4' ? 'gpt-4' : '', // Add model parameter here
+      model,
     })
   }
   catch (error) {

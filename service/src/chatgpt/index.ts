@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv'
 import 'isomorphic-fetch'
-import type { ChatGPTAPIOptions, ChatGPTUnofficialProxyAPI, ChatMessage, SendMessageOptions } from 'chatgpt'
+import type { ChatGPTAPIOptions, ChatMessage, SendMessageOptions } from 'chatgpt'
 import { ChatGPTAPI } from 'chatgpt'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 import httpsProxyAgent from 'https-proxy-agent'
@@ -27,20 +27,31 @@ const timeoutMs: number = !isNaN(+process.env.TIMEOUT_MS) ? +process.env.TIMEOUT
 
 let apiModel: ApiModel
 
-if (!isNotEmptyString(process.env.OPENAI_API_KEY) && !isNotEmptyString(process.env.OPENAI_ACCESS_TOKEN))
-  throw new Error('Missing OPENAI_API_KEY or OPENAI_ACCESS_TOKEN environment variable')
-let use_model = ''
-let api: ChatGPTAPI | ChatGPTUnofficialProxyAPI
+if (!isNotEmptyString(process.env.OPENAI_API_KEY) && !isNotEmptyString(process.env.OPENAI_API_KEY_GPT4))
+  throw new Error('Missing OPENAI_API_KEY')
 
-function initializeAPI() {
-  // More Info: https://github.com/transitive-bullshit/chatgpt-api
+class ApiManager {
+  private apis: Map<string, ChatGPTAPI>
 
-  if (isNotEmptyString(process.env.OPENAI_API_KEY)) {
+  constructor() {
+    this.apis = new Map()
+  }
+
+  getAPI(model: string): ChatGPTAPI {
+    if (!this.apis.has(model)) {
+      const api = this.initializeAPI(model)
+      this.apis.set(model, api)
+    }
+
+    return this.apis.get(model)
+  }
+
+  private initializeAPI(model: string): ChatGPTAPI {
+    const apiKey = model === 'gpt-4' ? process.env.OPENAI_API_KEY_GPT4 : process.env.OPENAI_API_KEY
     const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL
-    const model = use_model ? 'gpt-4' : 'gpt-3.5-turbo'
 
     const options: ChatGPTAPIOptions = {
-      apiKey: use_model ? process.env.OPENAI_API_KEY_GPT4 : process.env.OPENAI_API_KEY,
+      apiKey,
       completionParams: { model },
       debug: true,
     }
@@ -63,11 +74,13 @@ function initializeAPI() {
 
     setupProxy(options)
 
-    api = new ChatGPTAPI({ ...options })
-    apiModel = 'ChatGPTAPI'
+    const api = new ChatGPTAPI({ ...options })
+
+    return api
   }
 }
-initializeAPI()
+
+const apiManager = new ApiManager()
 
 async function chatReplyProcess(options: RequestOptions) {
   const { message, lastContext, process, systemMessage, model } = options
@@ -85,13 +98,8 @@ async function chatReplyProcess(options: RequestOptions) {
       else
         options = { ...lastContext }
     }
-
-    if (model === 'gpt-4')
-      use_model = 'gpt-4'
-    else
-      use_model = ''
-
-    initializeAPI()
+    console.log(model)
+    const api = apiManager.getAPI(model)
 
     const response = await api.sendMessage(message, {
       ...options,

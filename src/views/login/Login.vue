@@ -113,11 +113,12 @@ function newInfor() {
     duration: 3000,
   })
   notification.success({
-    content: '原地址被墙，请及时在左侧菜单栏添加客服微信，以便获取备用地址。最新地址为：AIworlds.cc',
+    content: '修复了上下文不连续的bug',
+    meta: '2023-5-3',
     duration: 10000,
   })
   notification.success({
-    content: 'chatgpt4.0模型已经上线, 邀请新用户就可以体验使用！详情请见左侧菜单栏',
+    content: 'chatgpt4.0模型已经上线, 左侧邀请新用户就可以体验使用！详情请见左侧菜单栏',
     duration: 10000,
   })
 }
@@ -527,7 +528,6 @@ function handlePasswordInput() {
 	.login-container{
 		position: relative;
 		width: 100%;
-		min-width: 400px;
 		.small-bgc{
 			position: absolute;
 			top: 20px;
