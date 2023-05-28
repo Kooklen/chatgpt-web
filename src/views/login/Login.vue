@@ -8,10 +8,13 @@ import { debounce } from '@/utils/functions/debounce'
 const notification = useNotification()
 const findPwd = ref(false)
 const loginForm = reactive({
+  phone: '',
   email: '',
   password: '',
   invitationCode: '',
   emailCode: '',
+  phoneCode: '',
+  account: '',
 })
 const route = useRoute()
 const loginStatus = ref(true)
@@ -27,16 +30,28 @@ onMounted(() => {
 localStorage.removeItem('token')
 
 const isReadyLogin = computed(
-  () => loginForm.email && loginForm.password.length >= 6,
+  () => loginForm.account && loginForm.password.length >= 6,
 )
 
 const debouncedHandleLogin = debounce(handleLogin, 0)
 
 function submitLogin() {
   if (loginStatus.value) {
+    let loginPayload = {}
+    if (/^\d{11}$/.test(loginForm.account)) { // 如果是手机号
+      loginPayload = {
+        phone: loginForm.account,
+        password: loginForm.password,
+      }
+    }
+    else { // 否则视为邮箱
+      loginPayload = {
+        email: loginForm.account,
+        password: loginForm.password,
+      }
+    }
     axios.post('/login', {
-      email: loginForm.email,
-      password: loginForm.password,
+      ...loginPayload,
     })
       .then((response) => {
         // 登录成功，保存 token
@@ -61,10 +76,10 @@ function submitLogin() {
   }
   else {
     axios.post('/register', {
-      email: loginForm.email,
+      phone: loginForm.phone,
       password: loginForm.password,
       invitationCode: loginForm.invitationCode ? loginForm.invitationCode : undefined,
-    	emailCode: loginForm.emailCode.trim(),
+    	phoneCode: loginForm.phoneCode.trim(),
     })
       .then((response) => {
         if (response.data.status === 'success') {
@@ -113,25 +128,59 @@ function newInfor() {
     duration: 3000,
   })
   notification.success({
-    content: '修复了上下文不连续的bug',
-    meta: '2023-5-3',
-    duration: 10000,
-  })
-  notification.success({
     content: 'chatgpt4.0模型已经上线, 左侧邀请新用户就可以体验使用！详情请见左侧菜单栏',
     duration: 10000,
   })
 }
 
-function getEmailCode() {
-  const email = loginForm.email
+// function getEmailCode() {
+//   const email = loginForm.email
+//   const type = findPwd.value ? 'findPwd' : ''
+//   isLoading.value = true
+//
+//   axios.post('/verify-email', { email, type })
+//     .then((response) => {
+//       if (response.data.status === 'success') {
+//         // 验证码邮件发送成功，显示成功信息
+//         notification.success({
+//           content: response.data.message,
+//           duration: 5000,
+//         })
+//         startCountdown()
+//       }
+//       else {
+//         // 发生错误，显示错误信息
+//         notification.error({
+//           content: response.data.message,
+//           duration: 5000,
+//         })
+//         isLoading.value = false
+//         countdown.value = 60
+//         clearInterval(timerId) // 发生错误，清除计时器
+//       }
+//     })
+//     .catch((error) => {
+//       isLoading.value = false
+//       countdown.value = 60
+//       clearInterval(timerId) // 发生错误，清除计时器
+//
+//       // 发生错误，显示错误信息
+//       notification.error({
+//         content: 'An error occurred while sending the verification email.',
+//         duration: 5000,
+//       })
+//     })
+// }
+
+function getPhoneCode() {
+  const phone = loginForm.phone
   const type = findPwd.value ? 'findPwd' : ''
   isLoading.value = true
 
-  axios.post('/verify-email', { email, type })
+  axios.post('/verify-phone', { phone, type })
     .then((response) => {
       if (response.data.status === 'success') {
-        // 验证码邮件发送成功，显示成功信息
+        // 验证码短信发送成功，显示成功信息
         notification.success({
           content: response.data.message,
           duration: 5000,
@@ -156,7 +205,7 @@ function getEmailCode() {
 
       // 发生错误，显示错误信息
       notification.error({
-        content: 'An error occurred while sending the verification email.',
+        content: 'An error occurred while sending the verification message to the phone.',
         duration: 5000,
       })
     })
@@ -166,9 +215,9 @@ function resetPwd() {
   isLoading.value = true
 
   axios.post('/reset-password', {
-    email: loginForm.email,
+    phone: loginForm.phone,
     password: loginForm.password,
-    emailCode: loginForm.emailCode,
+    phoneCode: loginForm.phoneCode,
   })
     .then((response) => {
       if (response.data.status === 'success') {
@@ -213,14 +262,15 @@ const modelRef = ref<ModelType>({
   reenteredPassword: null,
 })
 const rules: FormRules = {
-  email: [
+  account: [
     {
       required: true,
       validator(rule: FormItemRule, value: string) {
         if (!value)
-          return new Error('需要邮箱')
-        else if (!/^\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/.test(value))
-          return new Error('请输入有效的邮箱地址')
+          return new Error('需要邮箱或电话号码')
+        else if (!(/^\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/.test(value)
+					|| /^\d{11}$/.test(value)))
+          return new Error('请输入有效的邮箱地址或11位电话号码')
 
         return true
       },
@@ -258,14 +308,14 @@ const rules: FormRules = {
       trigger: ['input', 'blur'],
     },
   ],
-  emailCode: [
+  phoneCode: [
     {
       required: true,
       validator(rule: FormItemRule, value: string) {
         if (value && value.length !== 6)
-          return new Error('邮箱验证码需要为6位数字')
+          return new Error('手机验证码需要为6位数字')
         else if (value && !/^\d{6}$/.test(value))
-          return new Error('邮箱验证码必须是6位数字')
+          return new Error('手机验证码必须是6位数字')
 
         return true
       },
@@ -301,12 +351,16 @@ function handlePasswordInput() {
 
       <div class="input-group">
         <NForm ref="formRef" :model="loginForm" :rules="rules">
-          <NFormItem path="email" label="邮箱">
-            <NInput v-model:value="loginForm.email" size="large" @keydown.enter.prevent />
+          <NFormItem v-if="loginStatus && !findPwd" path="account" label="邮箱/手机号">
+            <NInput v-model:value="loginForm.account" size="large" @keydown.enter.prevent />
           </NFormItem>
-          <NFormItem v-if="!loginStatus || findPwd" path="emailCode" label="邮箱验证码">
+
+          <NFormItem v-else path="phone" label="手机号">
+            <NInput v-model:value="loginForm.phone" size="large" @keydown.enter.prevent />
+          </NFormItem>
+          <NFormItem v-if="!loginStatus || findPwd" path="phoneCode" label="手机验证码">
             <NInput
-              v-model:value="loginForm.emailCode"
+              v-model:value="loginForm.phoneCode"
               size="large"
               max-length="6"
               @keydown.enter.prevent
@@ -345,7 +399,7 @@ function handlePasswordInput() {
           v-if="!loginStatus || findPwd"
           class="get-code"
           :disabled="isLoading"
-          @click="getEmailCode"
+          @click="getPhoneCode"
         >
           {{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
         </NButton>
@@ -362,7 +416,6 @@ function handlePasswordInput() {
           v-if="!loginStatus && !findPwd"
           class="submit"
           :loading="isSubmitting"
-          :disabled="isSubmitting || !isReadyLogin"
           :class="{ 'submit-disabed': isSubmitting }"
           @click="debouncedHandleLogin"
         >

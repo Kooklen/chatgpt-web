@@ -4,6 +4,8 @@
   "extends": ["@antfu"],
 	"rules": {
 		"@typescript-eslint/no-var-requires": "off",
-		"no-console": "off"
+		"no-console": "off",
+		"@typescript-eslint/no-unsafe-assignment": "off",
+		"@typescript-eslint/no-unsafe-member-access": "off"
 	}
 }

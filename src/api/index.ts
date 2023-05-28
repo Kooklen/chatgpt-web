@@ -45,10 +45,20 @@ export function fetchUserInfo<T>(token: string) {
   })
 }
 
-export function fetchQrCode<T>(token: string) {
+export function fetchPackageInfo<T>(token: string) {
+  return post<T>({
+    url: '/user-packages',
+    data: { token },
+  })
+}
+
+export function fetchQrCode<T>(
+  params: {
+    selectPackage?: any
+  }) {
   return post<T>({
     url: '/initiate-payment',
-    data: { token },
+    data: { selectPackage: params.selectPackage },
   })
 }
 

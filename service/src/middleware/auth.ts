@@ -2,6 +2,7 @@ import { promisify } from 'util'
 import jwt from 'jsonwebtoken'
 import { isNotEmptyString } from '../utils/is'
 import { client } from '../redis'
+
 const auth = async (req, res, next) => {
   const privateKey = 'your_private_key_here'
 
@@ -15,13 +16,13 @@ const auth = async (req, res, next) => {
     else {
       try {
         const decodedToken = jwt.verify(token, privateKey)
-        const email = decodedToken.email
+        const id = decodedToken.id
 
-        const storedToken = await promisify(client.get).bind(client)(email)
+        const storedToken = await promisify(client.get).bind(client)(id)
 
         if (token !== storedToken)
           res.status(401).send({ status: 'fail', message: 'Invalid token. Please authenticate.', code: 401 })
-				 else
+        else
           next()
       }
       catch (error) {

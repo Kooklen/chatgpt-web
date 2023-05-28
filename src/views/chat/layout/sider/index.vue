@@ -1,17 +1,18 @@
 <script setup lang='ts'>
 import type { CSSProperties } from 'vue'
 import { computed, ref, watch } from 'vue'
-import { NButton, NImage, NLayoutSider, NModal, NPopover, useMessage } from 'naive-ui'
+import { NButton, NCard, NImage, NLayoutSider, NModal, NPopover, NTabPane, NTable, NTabs, NTbody, NTd, NTh, NThead, NTr, useMessage } from 'naive-ui'
 import List from './List.vue'
 import Footer from './Footer.vue'
 import { useAppStore, useChatStore } from '@/store'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { PromptStore } from '@/components/common'
-import { fetchQrCode, fetchUserInfo } from '@/api'
+import { fetchPackageInfo, fetchQrCode, fetchUserInfo } from '@/api'
+import { router } from '@/router'
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
-const message = useMessage()
+const Nmessage = useMessage()
 const { isMobile } = useBasicLayout()
 const show = ref(false)
 const collapsed = computed(() => appStore.siderCollapsed)
@@ -48,27 +49,47 @@ const showModal = ref(false)
 const showUpgradeModal = ref(false)
 const token = ref(localStorage.getItem('token'))
 const secretKey = token.value?.trim()
-const userInfo = ref({
-  email: '',
+const userInfo: any = ref({
   invitation_code: '',
-  membership_end: '',
-  membership_times: 0,
+  invitation_score: [{ gpt_times: 0, balance: 0 }],
+  invitation_user: [],
 })
 
-const qrCodeUrl = ref('')
+const packageInfo: any = ref({
+  gpt3_times: '',
+  gpt4_times: '',
+  gpt3_vip_end: '',
+  gpt4_vip_end: '',
+  balance: '0',
+})
+
+const selectCard = ref(0)
+
+const packages: any = ref({})
+
+const showPayModal = ref(false)
 
 const getUserInfo = async () => {
   try {
     if (secretKey) {
       const { data } = await fetchUserInfo(secretKey)
       // @ts-expect-error
-      userInfo.value.email = data.userInfo.email
+      userInfo.value = data.userInfo
+    }
+  }
+  catch (error: any) {
+    console.error(error)
+  }
+}
+
+const getPackageInfo = async () => {
+  try {
+    if (secretKey) {
+      const { data } = await fetchPackageInfo(secretKey)
       // @ts-expect-error
-      userInfo.value.invitation_code = data.userInfo.invitation_code
+      packageInfo.value = data.userInfo
       // @ts-expect-error
-      userInfo.value.membership_end = data.userInfo.membership_end
-      // @ts-expect-error
-      userInfo.value.membership_times = data.userInfo.membership_times
+      packages.value = data.packages
     }
   }
   catch (error: any) {
@@ -77,46 +98,72 @@ const getUserInfo = async () => {
 }
 
 const handleInvite = async () => {
-  if (!secretKey)
+  if (!secretKey) {
+    router.push('/login')
     return
+  }
   getUserInfo()
   showModal.value = true
 }
 
+const currentTab = ref('accountStatus')
+
+const pollingInterval = 3000 // 轮询间隔，单位为毫秒
 let pollingIntervalId: any
+
+const startPolling = () => {
+  pollingIntervalId = setInterval(getPackageInfo, pollingInterval)
+}
+
+const stopPolling = () => {
+  clearInterval(pollingIntervalId)
+}
+const isPaying = ref(false)
+const payDetail = ref({
+  qrcode: '',
+  packageName: '',
+  packagePrice: '',
+})
 const getPayQrCode = async () => {
   if (secretKey) {
-    clearInterval(pollingIntervalId)
-    qrCodeUrl.value = '正在加载微信二维码中，请稍等...'
-    const { data } = await fetchQrCode(secretKey)
+    isPaying.value = true
+    const { data, message } = await fetchQrCode({ selectPackage: selectCard.value })
+    if (message === '支付成功，已从余额扣款') {
+      Nmessage.success(message)
+      currentTab.value = 'accountStatus'
+      isPaying.value = false
+      startPolling()
+      return
+    }
+    showPayModal.value = true
     // @ts-expect-error
-    qrCodeUrl.value = data.qrcode
-
-    pollingIntervalId = setInterval(getUserInfo, 5000)
+    payDetail.value = data
   }
 }
 
 const clearQrCode = () => {
-  qrCodeUrl.value = ''
-  clearInterval(pollingIntervalId)
+  payDetail.value.qrcode = ''
+  isPaying.value = false
+  stopPolling()
+}
+
+const paySuccess = () => {
+  startPolling()
+  payDetail.value.qrcode = ''
+  isPaying.value = false
+  showPayModal.value = false
+  currentTab.value = 'accountStatus'
 }
 
 const handleUpdateGpt4 = async () => {
-  if (!secretKey)
+  if (!secretKey) {
+    router.push('/login')
     return
-
-  showUpgradeModal.value = true
-  getUserInfo()
-}
-
-const checkMembershipEnd = computed(() => {
-  const now = new Date()
-  if (userInfo.value && userInfo.value.membership_end) {
-    const membershipEnd = new Date(userInfo.value.membership_end)
-    return membershipEnd > now
   }
-  return false
-})
+  getPackageInfo()
+  startPolling()
+  showUpgradeModal.value = true
+}
 
 function formatDate(date: any) {
   const d = new Date(date)
@@ -130,9 +177,27 @@ function formatDate(date: any) {
   })
 }
 
+function calculateRemainingDays(date: any) {
+  const now = new Date()
+  const targetDate = new Date(date)
+
+  // 如果目标日期在现在之后
+  if (targetDate > now) {
+    // 计算时间差（以毫秒为单位），然后转换为天数
+    const differenceInMilliseconds = targetDate.getTime() - now.getTime()
+    const differenceInDays = Math.ceil(differenceInMilliseconds / (1000 * 60 * 60 * 24))
+
+    return differenceInDays
+  }
+  else {
+    // 如果目标日期在现在之前或就是现在，返回0
+    return 0
+  }
+}
+
 function copyToClipboard(text: any) {
   if (!navigator.clipboard) {
-    message.warning(
+    Nmessage.warning(
       '浏览器不支持复制到您的剪贴板，请手动复制。',
     )
     console.error('Clipboard API not available')
@@ -140,7 +205,7 @@ function copyToClipboard(text: any) {
   }
 
   navigator.clipboard.writeText(text).then(() => {
-    message.info(
+    Nmessage.info(
       '已经成功完整复制到您的剪贴板啦！',
     )
   }, (err) => {
@@ -163,72 +228,158 @@ watch(
 <template>
   <NModal v-model:show="showUpgradeModal" preset="dialog" title="Dialog" class="modal" :on-after-leave="clearQrCode">
     <template #header>
-      <div>您的会员状态</div>
+      <div>会员状态</div>
     </template>
-    <div v-if="checkMembershipEnd" class="mt-5">
-      您的GPT4会员截止日期是：{{ formatDate(userInfo.membership_end) }}
-    </div>
-    <div class="mt-5">
-      您的GPT4剩余体验次数：{{ userInfo.membership_times }}次
-    </div>
-    <div class="mt-5">
-      <div class="text-center">
-        开通<span style="color: #0A64FF">GPT4月度会员</span>，享受不限次提问 <br> 50元/月(官方原价20美元/月)
-      </div>
-      <div class="mt-5">
-        <NButton v-if="!qrCodeUrl" type="primary" block @click="getPayQrCode">
-          立即开通
-        </NButton>
-        <div v-if="qrCodeUrl" class="text-center">
-          <NImage
-            :src="qrCodeUrl"
-            preview-disabled
-            fallback-src="https://07akioni.oss-cn-beijing.aliyuncs.com/07akioni.jpeg"
-            class="qrCodeUrl"
+    <NTabs v-model:value="currentTab" type="line" animated>
+      <NTabPane name="accountStatus" tab="账户情况">
+        <div>
+          您的账户余额为{{ (Number(packageInfo.balance) || 0).toFixed(2) }}元
+          <span style="color: #999;font-size: 12px">(可以抵扣任意套餐)</span>
+        </div>
+        <div>
+          <div class="package" style="font-size: 14px">
+            <NCard
+              v-show="calculateRemainingDays(packageInfo.gpt3_vip_end) > 0"
+              class="package_item package_item_focus"
+              size="small"
+            >
+              <div class="title">
+                GPT3会员剩余天数是：{{ calculateRemainingDays(packageInfo.gpt3_vip_end) }}天
+              </div>
+            </NCard>
+            <NCard
+              v-show="calculateRemainingDays(packageInfo.gpt4_vip_end) > 0"
+              class="package_item package_item_focus"
+              size="small"
+            >
+              <div class="title">
+                GPT4会员剩余天数是：{{ calculateRemainingDays(packageInfo.gpt4_vip_end) }}天
+              </div>
+            </NCard>
+            <NCard
+              class="package_item package_item_focus"
+              size="small"
+            >
+              <div class="title">
+                GPT3剩余使用次数：{{ packageInfo.gpt3_times }}次
+              </div>
+            </NCard>
+            <NCard
+              class="package_item package_item_focus"
+              size="small"
+            >
+              <div class="title">
+                GPT4剩余使用次数：{{ packageInfo.gpt4_times }}次
+              </div>
+            </NCard>
+          </div>
+        </div>
+      </NTabPane>
+      <NTabPane name="buyPackage" tab="购买套餐">
+        <div class="package">
+          <div>
+            您的账户余额为{{ (Number(packageInfo.balance) || 0).toFixed(2) }}元
+            <span style="color: #999;font-size: 12px">(可以抵扣任意套餐)</span>
+          </div>
+          <NCard
+            v-for="(item, index) in packages" :key="index"
+            class="package_item mt-3"
+            size="small" :class="{ package_item_focus: index + 1 === selectCard }" @click="selectCard = index + 1"
           >
-            <div class="qrcode-word mt5">
-              支付成功后，请重新打开窗口
+            <div class="font-bold title">
+              {{ item.package_name }}
             </div>
-          </nimage>
-          <div class="flex ml-10 mr-10" style="justify-content: space-between">
-            <NButton type="primary" size="small" @click="getPayQrCode">
-              刷新二维码
-            </NButton>
-            <NButton type="primary" size="small" @click="getUserInfo">
-              支付成功
+            <div class="">
+              价格：{{ item.price }}
+            </div>
+            <div class="">
+              {{ item.description }}
+            </div>
+          </NCard>
+          <div class="mt-5" style="width: 100%;text-align: center">
+            <NButton :disabled="isPaying" type="primary" block @click="getPayQrCode">
+              立即开通
             </NButton>
           </div>
         </div>
-      </div>
-    </div>
+      </NTabPane>
+    </NTabs>
   </NModal>
   <NModal v-model:show="showModal" preset="dialog" title="Dialog" class="modal">
     <template #header>
-      <div>您的会员状态</div>
+      <div>您的邀请状态</div>
     </template>
-    <div v-if="checkMembershipEnd" class="mt-5">
-      您的GPT4会员截止日期是：{{ formatDate(userInfo.membership_end) }}
-    </div>
-    <div class="mt-5">
-      您的GPT4剩余体验次数：{{ userInfo.membership_times }}次
-    </div>
-    <div class="mt-5" @click="copyToClipboard(userInfo.invitation_code)">
-      <NPopover placement="right">
-        <template #trigger>
-          您的邀请码是：{{ userInfo.invitation_code }}
-        </template>
-        <span>点击可以直接复制！</span>
-      </NPopover>
-    </div>
-    <div class="mt-5">
-      <NPopover trigger="hover" placement="bottom">
-        <template #trigger>
-          <div class="mt-5" @click="copyToClipboard(`http://aiworlds.cc/#/login/${userInfo.invitation_code}`)">
-            您的邀请链接是：http://aiworlds.cc/#/login/{{ userInfo.invitation_code }}
+    <NTabs type="line" animated>
+      <NTabPane name="oasis" tab="邀请一下">
+        <div>
+          您通过邀请已经累积获得 <span style="color: #68bdff">{{ userInfo.invitation_score.gpt4_times || 0 }}</span> 次GPT4使用机会以及<span style="color: #68bdff">{{ userInfo.invitation_score.balance || 0 }}</span>元奖励！
+          <div style="font-size: 12px;color: #666">
+            每邀请一位新用户，您可以立即获得5次使用GPT-4模型的机会同时您可以获得受邀用户每次消费金额的20%可用于消费
           </div>
-        </template>
-        <span>点击可以直接复制！</span>
-      </NPopover>
+        </div>
+        <div class="mt-5" />
+        <div class="mt-5" @click="copyToClipboard(userInfo.invitation_code)">
+          <NPopover placement="right">
+            <template #trigger>
+              您的邀请码是：{{ userInfo.invitation_code }}
+            </template>
+            <span>点击可以直接复制！</span>
+          </NPopover>
+        </div>
+        <div class="mt-5">
+          <NPopover trigger="hover" placement="bottom">
+            <template #trigger>
+              <div class="mt-5" @click="copyToClipboard(`http://aiworlds.cc/#/login/${userInfo.invitation_code}`)">
+                您的邀请链接是：http://aiworlds.cc/#/login/{{ userInfo.invitation_code }}
+              </div>
+            </template>
+            <span>点击可以直接复制！</span>
+          </NPopover>
+        </div>
+      </NTabPane>
+      <NTabPane name="邀请列表">
+        <NTable :bordered="true" :single-line="false">
+          <NThead>
+            <NTr>
+              <NTh>被邀请用户</NTh>
+              <NTh>邀请时间</NTh>
+              <NTh>奖励</NTh>
+            </NTr>
+          </NThead>
+          <NTbody>
+            <NTr v-for="(item, index) in userInfo.invitation_user" :key="index">
+              <NTd>{{ item.emailOrPhone }}</NTd>
+              <NTd>{{ formatDate(item.invitationTime) }}</NTd>
+              <NTd>{{ item.reward }}</NTd>
+            </NTr>
+          </NTbody>
+        </NTable>
+      </NTabPane>
+    </NTabs>
+  </NModal>
+  <NModal v-model:show="showPayModal" preset="dialog" title="Dialog" class="modal" :on-after-leave="clearQrCode">
+    <template #header>
+      <div>请尽快支付</div>
+    </template>
+    <div v-if="payDetail.qrcode" class="text-center">
+      <div>你选购的套餐为<span class="font-bold">{{ payDetail.packageName }}</span>，实际需要支付金额为<span class="font-bold">{{ Number(payDetail.packagePrice).toFixed(2) }}</span>元，请用微信扫码</div>
+      <NImage
+        :src="payDetail.qrcode"
+        preview-disabled
+        class="qrCodeUrl"
+      >
+        <div class="qrcode-word mt5">
+          支付成功后，请重新打开窗口
+        </div>
+      </nimage>
+      <div class="flex ml-10 mr-10" style="justify-content: space-between">
+        <NButton type="primary" size="small" @click="getPayQrCode">
+          刷新二维码
+        </NButton>
+        <NButton type="primary" size="small" @click="paySuccess">
+          支付成功
+        </NButton>
+      </div>
     </div>
   </NModal>
   <NLayoutSider
@@ -260,7 +411,7 @@ watch(
               </NButton>
             </template>
             <div>
-              <img src="https://i.328888.xyz/2023/04/22/i58CjJ.jpeg" style="width: 220px;height: 190px;">
+              <img src="@/views/chat/layout/sider/vx.jpg" style="width: 220px;height: auto;">
             </div>
           </NPopover>
         </div>
@@ -271,7 +422,7 @@ watch(
         </div>
         <div class="p-4 pb-0 mb-2">
           <NButton type="primary" block @click="handleUpdateGpt4">
-            {{ $t('store.updateGpt4') }}
+						升级会员
           </NButton>
         </div>
       </main>
@@ -284,7 +435,7 @@ watch(
   <PromptStore v-model:visible="show" />
 </template>
 
-<style scoped>
+<style lang="less" scoped>
 .link-input {
 	border: none;
 	background: transparent;
@@ -312,18 +463,6 @@ watch(
 	white-space: pre-wrap; /* 添加这一行以确保在input中能换行 */
 }
 
-@media (max-width: 599px) {
-	.modal {
-		width: 90vw;
-	}
-}
-
-@media (min-width: 600px) {
-	.modal {
-		width: 50vw;
-	}
-}
-
 .qrCodeUrl{
 	width: 300px;
 	height: 300px;
@@ -334,5 +473,76 @@ watch(
 	width: 100%;
 	text-align: center;
 	font-size: 14px;
+}
+
+.package{
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	padding: 5px;
+	margin-top: 5px;
+
+	.package_item{
+		cursor: pointer;
+		&:hover{
+			border: 1px solid #68bdff;
+		}
+		margin-bottom: 5px;
+		width: 180px;
+		height: 100px;
+		.title{
+			font-size: 14px;
+		}
+		div{
+			font-size: 12px!important;
+		}
+	}
+	.package_item_focus{
+		border: 1px solid #42adff;
+		background-color: rgba(66, 173, 255,.1);
+	}
+}
+
+@media (max-width: 599px) {
+	.modal {
+		width: 90vw;
+	}
+	.package {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		padding: 5px 0px!important;
+
+		.package_item {
+			font-size: 12px !important;
+			cursor: pointer;
+
+			&:hover {
+				border: 1px solid #68bdff;
+			}
+
+			margin-bottom: 5px !important;
+			width: 140px !important;
+			height: 90px !important;
+
+			.title {
+				font-size: 14px;
+			}
+
+			div {
+				font-size: 12px !important;
+			}
+		}
+	}
+	.package_item_focus{
+		border: 1px solid #42adff;
+		background-color: rgba(66, 173, 255,.1);
+	}
+}
+
+@media (min-width: 600px) {
+	.modal {
+		width: 50vw;
+	}
 }
 </style>

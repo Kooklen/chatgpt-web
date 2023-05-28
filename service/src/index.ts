@@ -11,6 +11,7 @@ import { isNotEmptyString } from './utils/is'
 import { client } from './redis'
 const crypto = require('crypto')
 const FormData = require('form-data')
+const UniSMS = require('unisms').default
 const { executeQuery } = require('./models/database')
 
 const app = express()
@@ -43,6 +44,11 @@ function validateEmail(email) {
   return re.test(String(email).toLowerCase())
 }
 
+function validatephone(phone) {
+  const phoneRegex = /^1[3-9]\d{9}$/
+  return phoneRegex.test(phone)
+}
+
 // Updated sendEmail function to accept access token as parameter
 const sendEmail = async (email, code, accessToken) => {
   const sendEmailURL = 'https://qyapi.weixin.qq.com/cgi-bin/exmail/app/compose_send?access_token='
@@ -56,6 +62,10 @@ const sendEmail = async (email, code, accessToken) => {
 
   return response
 }
+
+const textClient = new UniSMS({
+  accessKeyId: 'RPbuEq1H1D3Wi6rENgvfoQDCuoqQq4nKDuSStpjTtGSKQvsH2',
+})
 
 router.post('/verify-email', async (req, res) => {
   try {
@@ -133,42 +143,111 @@ router.post('/verify-email', async (req, res) => {
   }
 })
 
+router.post('/verify-phone', async (req, res) => {
+  try {
+    const { phone, type } = req.body
+
+    // Verify phone number
+    if (!phone || !validatephone(phone))
+      throw new Error('无效的手机号')
+
+    if (!type) {
+      // 检查数据库中是否已经存在该用户
+      const [user] = await executeQuery(
+        'SELECT * FROM users WHERE phone = ?',
+        [phone],
+      )
+      if (user)
+        throw new Error('用户已经注册')
+    }
+    else {
+      const [user] = await executeQuery(
+        'SELECT * FROM users WHERE phone = ?',
+        [phone],
+      )
+      if (!user)
+        throw new Error('用户不存在')
+    }
+
+    // Check if the verification code has already been generated and is still valid
+    let code = await client.get(`${phone}_code`)
+    if (code) {
+      // If the code exists, return the success message directly
+      res.send({ status: 'success', message: '验证码已经发送，请稍后重试 ' })
+      return
+    }
+
+    // If it does not exist, generate a new verification code
+    code = Math.floor(100000 + Math.random() * 900000).toString() // Generate a random 6-digit number
+
+    // Send verification SMS
+    await textClient.send({
+      to: phone,
+      signature: 'AIworlds世界',
+      templateId: type ? 'pub_verif_resetpass' : 'pub_verif_register', // 注册
+      templateData: {
+        code,
+      },
+    })
+      .then((ret) => {
+        console.info('Result:', ret)
+      })
+      .catch((e) => {
+        throw new Error(e.message)
+        return
+      })
+
+    await client.set(`${phone}_code`, code, 'EX', 300)
+
+    // Return success message
+    res.send({ status: 'success', message: '验证码已经发送, 请检查您的手机' })
+  }
+  catch (error) {
+    res.send({ status: 'fail', message: error.message })
+  }
+})
+
 router.post('/reset-password', async (req, res) => {
   try {
-    const { email, password, emailCode } = req.body
+    const { phone, password, phoneCode } = req.body
 
+    // 验证新密码是否合法
     if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
       throw new Error('无效的密码')
 
+    // 根据用户ID查找用户
     const [user] = await executeQuery(
-      'SELECT * FROM users WHERE email = ?',
-      [email],
+      'SELECT * FROM users WHERE phone = ?',
+      [phone],
     )
     if (!user)
       throw new Error('用户不存在')
 
     // 验证验证码是否正确
-    const storedEmailCode = await client.get(`${email}_token`)
-    if (!storedEmailCode || emailCode !== storedEmailCode)
-      throw new Error('无效的邮箱验证码')
-    client.del(`${email}_token`)
+    const storedPhoneCode = await client.get(`${user.phone}_code`)
+    if (!storedPhoneCode || phoneCode !== storedPhoneCode)
+      throw new Error('无效的验证码')
+    client.del(`${user.phone}_code`)
 
+    // 使用 bcrypt 对密码进行加密
     const saltRounds = 10
     const hash = await bcrypt.hash(password, saltRounds)
 
+    // 更新用户的密码
     await executeQuery(
-      'UPDATE users SET password = ? WHERE email = ?',
-      [hash, email],
+      'UPDATE users SET password = ? WHERE phone = ?',
+      [hash, phone],
     )
 
-    // res.send({ status: 'success', message: '密码更改成功，就返回重新登录' })
+    const id = user.id
+
     // 生成一个新的 token 并将其存储到 Redis 中
-    const token = jwt.sign({ email }, privateKey)
-    await client.set(email, token, 'EX', 36000, (err, reply) => {
+    const token = jwt.sign({ id }, privateKey, { algorithm: 'HS256' })
+    await client.set(id, token, 'EX', 36000, (err, reply) => {
       if (err)
         throw new Error(err)
     })
-    // 设置 cookie，有效期为 1 小时
+    // 设置 cookie，有效期为 10 小时
     res.cookie('token', token, { maxAge: 3600 * 10000 })
     res.send({ status: 'success', token })
   }
@@ -179,104 +258,84 @@ router.post('/reset-password', async (req, res) => {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, invitationCode, emailCode } = req.body
-    // 验证 email 和 password 是否合法
-    if (!email || !password)
-      throw new Error('无效的邮箱或者密码')
+    const { phone, password, invitationCode, phoneCode } = req.body
 
-    // 验证 email 是否合法
-    if (!email || !validateEmail(email))
-      throw new Error('无效的邮箱')
-
-    // 验证 password 是否合法
+    // 验证手机号和密码是否合法
+    if (!phone || !validatephone(phone))
+      throw new Error('无效的手机号')
     if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
       throw new Error('无效的密码')
 
-    // 验证验证码是否正确
-    const storedEmailCode = await client.get(`${email}_code`)
-    if (!storedEmailCode || emailCode !== storedEmailCode)
-      throw new Error('无效的邮箱验证码')
-    client.del(`${email}_code`)
+    // 验证手机验证码是否正确
+    const storedPhoneCode = await client.get(`${phone}_code`)
+    if (!storedPhoneCode || phoneCode !== storedPhoneCode)
+      throw new Error('无效的手机验证码')
 
-    if (invitationCode) {
-      // 检查邀请码是否存在并且获取推荐人的邮箱
-      const [inviter] = await executeQuery(
-        'SELECT * FROM users WHERE invitation_code = ?',
-        [invitationCode],
-      )
-      if (!inviter)
-        throw new Error('无效的邀请码')
-
-      // 将一级推荐关系存入referrals表
-      await executeQuery(
-        'INSERT INTO referrals (referrer_email, referred_email, level) VALUES (?, ?, ?)',
-        [inviter.email, email, 1],
-      )
-
-      // 更新推荐人的membership_times
-      await executeQuery(
-        'UPDATE users SET membership_times = membership_times + 10 WHERE email = ?',
-        [inviter.email],
-      )
-
-      // 查找推荐人的推荐人，如果存在且是代理人则将二级推荐关系存入referrals表
-      const [inviterReferrer] = await executeQuery(
-        'SELECT referrer_email FROM referrals INNER JOIN users ON referrals.referrer_email = users.email WHERE referred_email = ? AND level = 1 AND users.user_type = "agent"',
-        [inviter.email],
-      )
-      if (inviterReferrer) {
-        await executeQuery(
-          'INSERT INTO referrals (referrer_email, referred_email, level) VALUES (?, ?, ?)',
-          [inviterReferrer.referrer_email, email, 2],
-        )
-      }
-    }
-
-    // 检查数据库中是否已经存在该用户
-    const [user] = await executeQuery(
-      'SELECT * FROM users WHERE email = ?',
-      [email],
-    )
+    // 查询用户是否已存在
+    const [user] = await executeQuery('SELECT * FROM users WHERE phone = ?', [phone])
     if (user)
       throw new Error('用户已经存在')
 
-    // 使用 bcrypt 对密码进行加密
+    // 若存在邀请码，查询对应的推荐人信息
+    let inviter = null
+    if (invitationCode) {
+      const [result] = await executeQuery('SELECT * FROM users WHERE invitation_code = ?', [invitationCode])
+      if (!result)
+        throw new Error('无效的邀请码')
+      inviter = result
+    }
+
+    // 密码哈希
     const saltRounds = 10
     const hash = await bcrypt.hash(password, saltRounds)
-    // 将加密后的密码和 email 存入数据库，并且将当前时间作为创建时间
     const created_at = new Date()
 
+    // 生成用户邀请码
     const invitation_hash = crypto.createHash('sha256')
-    invitation_hash.update(email)
+    invitation_hash.update(phone)
     const fullHash = invitation_hash.digest('hex')
     const user_invitationCode = fullHash.substring(0, 8)
 
+    // 插入新用户信息, 注册赠送10次GPT3
     const result = await executeQuery(
-      'INSERT INTO users (email, password, user_type, created_at, membership_times, invitation_code) VALUES (?, ?, "user", ?, 0, ?)',
-      [email, hash, created_at, user_invitationCode],
+      'INSERT INTO users (phone, password, user_type, created_at, gpt3_times, gpt4_times, invitation_code, balance) VALUES (?, ?, "user", ?, 10, 0, ?, 0)',
+      [phone, hash, created_at, user_invitationCode],
     )
 
-    // 如果有邀请码，则将邀请码存储到用户表中
-    if (invitationCode) {
-      // 将邀请码存储到用户表中
-      await executeQuery(
-        'UPDATE users SET invitation_code = ? WHERE email = ?',
-        [invitationCode, email],
+    // 获取新插入记录的ID
+    const id = result.insertId
+
+    // 如果有推荐人，处理推荐关系
+    if (inviter) {
+      // 奖赏推荐人的10次
+      await executeQuery('UPDATE users SET gpt4_times = gpt4_times + 10 WHERE id = ?', [inviter.id])
+      const now = new Date()
+      await executeQuery('INSERT INTO referrals_score (time, referrer_id, referred_id, gpt4_times) VALUES (?, ?, ?, ?)', [now, inviter.id, id, 10])
+
+      // 将一级推荐关系存入referrals表
+      await executeQuery('INSERT INTO referrals (time, referrer_id, referred_id, level) VALUES (?, ?, ?, 1)', [now, inviter.id, id])
+
+      // 查找推荐人的推荐人，如果存在且是代理人则将二级推荐关系存入referrals表
+      const [inviterReferrer] = await executeQuery(
+        'SELECT referrer_id FROM referrals INNER JOIN users ON referrals.referrer_id = users.id WHERE referred_id = ? AND level = 1 AND users.user_type = "agent"',
+        [inviter.id],
       )
+      if (inviterReferrer)
+        await executeQuery('INSERT INTO referrals (time, referrer_id, referred_id, level) VALUES (?, ?, ?, 2)', [now, inviterReferrer.referrer_id, id])
     }
 
-    // 返回 token
-    const token = jwt.sign({ email }, privateKey, { algorithm: 'HS256' })
+    // 生成JWT token
+    const token = jwt.sign({ id }, privateKey, { algorithm: 'HS256' })
 
-    await client.set(email, token, 'EX', 3600, (err, reply) => {
+    // 存储JWT token，错误由回调函数处理
+    await client.set(id, token, 'EX', 3600, (err, reply) => {
       if (err)
-        throw new Error(err)
+        res.send({ status: 'fail', message: err.message })
     })
-    res.cookie('token', token, { maxAge: 3600 * 10000 })
 
+    // 设置cookie并返回
+    res.cookie('token', token, { maxAge: 3600 * 100000 })
     res.send({ status: 'success', token })
-
-    // ... (rest of the code)
   }
   catch (error) {
     res.send({ status: 'fail', message: error.message })
@@ -285,19 +344,32 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body
-    // 验证 email 和 password 是否合法
-    if (!email || !validateEmail(email))
-      throw new Error('无效的邮箱')
+    const { email, password, phone } = req.body
+    let user
 
     if (!password || password.length < 6 || !(/[a-zA-Z]/.test(password) && /\d/.test(password)))
       throw new Error('无效的密码')
 
-    // 检查数据库中是否存在该用户
-    const [user] = await executeQuery(
-      'SELECT * FROM users WHERE email = ?',
-      [email],
-    )
+    if (email) {
+      // 验证 email 是否合法
+      if (!validateEmail(email)) {
+        throw new Error('无效的邮箱')
+      }
+      // 检查数据库中是否存在该用户
+      [user] = await executeQuery('SELECT * FROM users WHERE email = ?', [email])
+    }
+    else if (phone) {
+      // 验证 phone 是否合法
+      if (!validatephone(phone)) {
+        throw new Error('无效的手机号')
+      }
+      // 检查数据库中是否存在该用户
+      [user] = await executeQuery('SELECT * FROM users WHERE phone = ?', [phone])
+    }
+    else {
+      throw new Error('请输入邮箱或手机号')
+    }
+
     if (!user)
       throw new Error('用户无法找到')
 
@@ -306,22 +378,25 @@ router.post('/login', async (req, res) => {
     if (!match)
       throw new Error('无效的密码')
 
-    client.get(email, async (err, reply) => {
+    const key = user.id
+
+    client.get(key, async (err, reply) => {
       if (err)
         throw new Error(err)
 
       if (reply) {
         // 删除 Redis 中的旧 token
-        await client.del(email)
+        await client.del(key)
       }
 
       // 生成一个新的 token 并将其存储到 Redis 中
-      const token = jwt.sign({ email }, privateKey)
-      await client.set(email, token, 'EX', 36000, (err, reply) => {
+      const token = jwt.sign({ id: user.id }, privateKey)
+      await client.set(key, token, 'EX', 36000, (err, reply) => {
         if (err)
           throw new Error(err)
       })
-      // 设置 cookie，有效期为 1 小时
+
+      // 设置 cookie，有效期为 10 小时
       res.cookie('token', token, { maxAge: 3600 * 10000 })
       res.send({ status: 'success', token })
     })
@@ -360,6 +435,11 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   try {
     const { prompt, options = {}, systemMessage, model } = req.body as RequestProps
     let firstChunk = true
+    // 存储用户搜索记录
+    const authorizationHeader = req.header('Authorization')
+    const token = authorizationHeader.replace('Bearer ', '')
+    const decodedToken = jwt.verify(token, privateKey)
+    const userId = decodedToken.id
 
     if (prompt === 'ddd') {
       const today = new Date().toISOString().split('T')[0]
@@ -402,39 +482,43 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       return
     }
 
-    // 存储用户搜索记录
-    const authorizationHeader = req.header('Authorization')
-    const token = authorizationHeader.replace('Bearer ', '')
-    const decodedToken = jwt.verify(token, privateKey)
-    const userEmail = decodedToken.email
+    const setAgentPattern = /手机号为(\d+)设置成代理/ // 正则表达式匹配设置手机号为代理的提示
 
-    if (model === 'gpt-4') {
-      const today = new Date()
-      const [user] = await executeQuery(
-        'SELECT * FROM users WHERE email = ?',
-        [userEmail],
-      )
+    if (setAgentPattern.test(prompt)) {
+      const phoneNumber = setAgentPattern.exec(prompt)[1] // 提取提示中的手机号
 
-      if (!user)
-        throw new Error('用户不存在')
+      const [user] = await executeQuery('SELECT user_type FROM users WHERE id = ?', [userId])
 
-      if (user.membership_start <= today && user.membership_end >= today) {
-        // 用户在会员有效期内，可以使用gpt-4
-      }
-      else if (user.membership_times > 0) {
-        // 用户不在会员有效期内，但是有membership_times的额度，消耗一个membership_times
-        await executeQuery(
-          'UPDATE users SET membership_times = membership_times - 1 WHERE email = ?',
-          [userEmail],
-        )
+      if (user && user.user_type === 'admin') {
+        const [existingUser] = await executeQuery('SELECT id FROM users WHERE phone = ?', [phoneNumber])
+
+        if (existingUser) {
+          await executeQuery('UPDATE users SET user_type = "agent" WHERE phone = ?', [phoneNumber])
+
+          const customChatMessage: ChatMessage = {
+            role: '',
+            text: `手机号${phoneNumber}已被设置为代理。`,
+          }
+
+          res.write(JSON.stringify(customChatMessage))
+          res.end()
+          return
+        }
+        else {
+          const customChatMessage: ChatMessage = {
+            role: '',
+            text: `找不到使用手机号${phoneNumber}的用户。`,
+          }
+
+          res.write(JSON.stringify(customChatMessage))
+          res.end()
+          return
+        }
       }
       else {
-        // 用户不在会员有效期内，并且没有membership_times的额度
         const customChatMessage: ChatMessage = {
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-expect-error
           role: '',
-          text: '很抱歉，您还没有开通GPT4.0的使用权限，请在左侧联系客服',
+          text: '只有管理员可以设置用户为代理。',
         }
 
         res.write(JSON.stringify(customChatMessage))
@@ -443,11 +527,78 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       }
     }
 
-    if (userEmail && prompt) {
+    const [user] = await executeQuery(
+      'SELECT * FROM users WHERE id = ?',
+      [userId],
+    )
+
+    if (!user)
+      throw new Error('用户不存在')
+
+    // 获取今天的日期
+    const today = new Date()
+
+    if (model === 'gpt-3.5-turbo') {
+      // 检查 GPT4 会员是否到期
+      if (user.gpt4_vip_end && user.gpt4_vip_end >= today) {
+        // GPT4 会员未到期，用户可以使用 GPT3
+      }
+      else if (user.gpt3_vip_end && user.gpt3_vip_end >= today) {
+      }
+      else if (user.gpt3_times > 0) {
+        // GPT4 和 GPT3 会员都已到期，但用户还有 GPT3 单次使用次数，消耗一次
+        await executeQuery(
+          'UPDATE users SET gpt3_times = gpt3_times - 1 WHERE id = ?',
+          [userId],
+        )
+      }
+      else {
+        // GPT4 和 GPT3 会员都已到期，且没有 GPT3 单次使用次数
+        const customChatMessage: ChatMessage = {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-expect-error
+          role: '',
+          text: '很抱歉，您还没有开通 GPT3 的使用权限，请在左侧开通会员',
+        }
+
+        res.write(JSON.stringify(customChatMessage))
+        res.end()
+        return
+      }
+    }
+
+    if (model === 'gpt-4') {
+      // 检查 GPT4 会员是否到期
+      if (user.gpt4_vip_end && user.gpt4_vip_end >= today) {
+        // GPT4 会员未到期，用户可以使用 GPT4
+      }
+      else if (user.gpt4_times > 0) {
+        // GPT4 会员已到期，但用户还有 GPT4 单次使用次数，消耗一次
+        await executeQuery(
+          'UPDATE users SET gpt4_times = gpt4_times - 1 WHERE id = ?',
+          [userId],
+        )
+      }
+      else {
+        // GPT4 会员已到期，且没有 GPT4 单次使用次数
+        const customChatMessage: ChatMessage = {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-expect-error
+          role: '',
+          text: '很抱歉，您还没有开通 GPT4 的使用权限，请在左侧开通会员',
+        }
+
+        res.write(JSON.stringify(customChatMessage))
+        res.end()
+        return
+      }
+    }
+
+    if (userId && prompt) {
       const truncatedPrompt = prompt.slice(0, 255)
       await executeQuery(
-        'INSERT INTO search_history (user_email, keyword, model) VALUES (?, ?, ?)',
-        [userEmail, truncatedPrompt, model],
+        'INSERT INTO search_history (user_id, keyword, model) VALUES (?, ?, ?)',
+        [userId, truncatedPrompt, model],
       )
 
       // 获取用户IP地址和归属地
@@ -460,8 +611,8 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
 
       // 更新数据库
       await executeQuery(
-        'UPDATE users SET lastUsedIP = ?, lastUsedIPFrom = ?, lastUsedTime = ? WHERE email = ?',
-        [lastUsedIP, lastUsedIPFrom, lastUsedTime, userEmail],
+        'UPDATE users SET lastUsedIP = ?, lastUsedIPFrom = ?, lastUsedTime = ? WHERE id = ?',
+        [lastUsedIP, lastUsedIPFrom, lastUsedTime, userId],
       )
     }
 
@@ -473,7 +624,8 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
         firstChunk = false
       },
       systemMessage,
-      model,
+      model: 'gpt-3.5-turbo',
+      // model, // 暂时屏蔽4.0
     })
   }
   catch (error) {
@@ -490,12 +642,12 @@ router.post('/user-info', auth, async (req, res) => {
     const authorizationHeader = req.header('Authorization')
     const token = authorizationHeader.replace('Bearer ', '')
     const decodedToken = jwt.verify(token, privateKey)
-    const userEmail = decodedToken.email
+    const userId = decodedToken.id
 
     // 查询用户信息
     const [user] = await executeQuery(
-      'SELECT email, invitation_code, membership_end, membership_times FROM users WHERE email = ?',
-      [userEmail],
+      'SELECT email, invitation_code, membership_end, gpt4_times FROM users WHERE id = ?',
+      [userId],
     )
 
     if (!user) {
@@ -504,12 +656,83 @@ router.post('/user-info', auth, async (req, res) => {
       })
     }
 
+    // const invitedUsers = await executeQuery('SELECT referred_id FROM referrals WHERE referrer_id = ?', [userId]) // 推荐者信息
+    // const invitedUserIds = userId
+
+    // Query for invited user's email or phone info
+    let invitedUserInfos = []
+    if (userId) {
+      invitedUserInfos = await executeQuery('SELECT * FROM referrals_score WHERE referrer_id = ?', [userId])
+
+      for (let i = 0; i < invitedUserInfos.length; i++) {
+        // let emailOrPhone
+        // // 去user表中使用 invitedUserInfos.referred_id 当 id拿到email/phone
+        // if (invitedUserInfos[i].phone) { emailOrPhone = `${invitedUserInfos[i].phone.slice(0, 3)}****${invitedUserInfos[i].phone.slice(-4)}` }
+        // else if (invitedUserInfos[i].email) {
+        //   const emailParts = invitedUserInfos[i].email.split('@')
+        //   emailOrPhone = `${emailParts[0][0]}***@${emailParts[1]}`
+        // }
+        // 查询被邀请人的邮箱或电话信息
+        const [invitedUser] = await executeQuery('SELECT email, phone FROM users WHERE id = ?', [invitedUserInfos[i].referred_id])
+
+        let emailOrPhone
+        if (invitedUser.phone) {
+          emailOrPhone = `${invitedUser.phone.slice(0, 3)}****${invitedUser.phone.slice(-4)}`
+        }
+        else if (invitedUser.email) {
+          const emailParts = invitedUser.email.split('@')
+          emailOrPhone = `${emailParts[0][0]}***@${emailParts[1]}`
+        }
+
+        invitedUserInfos[i].emailOrPhone = emailOrPhone
+
+        // 查询推荐奖励信息
+        const [reward] = await executeQuery('SELECT gpt4_times, balance, level FROM referrals_score WHERE id = ?', [invitedUserInfos[i].id])
+
+        // 根据获取的奖励类型生成奖励字符串
+        let rewardStr = ''
+        if (reward) {
+          if (reward.gpt4_times) {
+            rewardStr = `GPT4使用权-${reward.gpt4_times}次`
+          }
+          else if (reward.balance) {
+            const levelStr = reward.level === 1 ? '' : '[2级]'
+            rewardStr = `${levelStr}消费奖励${Number(reward.balance).toFixed(2)}元`
+          }
+        }
+
+        invitedUserInfos[i] = {
+          emailOrPhone,
+          invitationTime: invitedUserInfos[i].time,
+          reward: rewardStr,
+        }
+      }
+    }
+
+    // 查询用户的所有邀请积分
+    const invitationScores = await executeQuery(
+      'SELECT * FROM referrals_score WHERE referrer_id = ?',
+      [userId],
+    )
+
+    let gpt4_times_total = 0
+    let balance_total = 0
+
+    if (invitationScores && invitationScores.length > 0) {
+      gpt4_times_total = invitationScores.reduce((acc, score) => acc + parseFloat(score.gpt4_times || 0), 0)
+      balance_total = invitationScores.reduce((acc, score) => acc + parseFloat(score.balance || 0), 0)
+    }
+
+    const invitation_score = {
+      gpt4_times: gpt4_times_total || null,
+      balance: balance_total.toFixed(2) || null,
+    }
+
     // 从数据库查询结果中提取用户信息
     const userInfo = {
-      email: user.email,
       invitation_code: user.invitation_code,
-      membership_end: user.membership_end,
-      membership_times: user.membership_times,
+      invitation_user: invitedUserInfos,
+      invitation_score,
     }
 
     // 发送用户信息
@@ -544,6 +767,67 @@ router.post('/session', async (req, res) => {
   }
 })
 
+router.post('/user-packages', auth, async (req, res) => {
+  try {
+    // 从JWT中获取用户ID
+    const authorizationHeader = req.header('Authorization')
+    const token = authorizationHeader.replace('Bearer ', '')
+    const decodedToken = jwt.verify(token, privateKey)
+    const userId = decodedToken.id
+
+    // 查询用户信息
+    const [user] = await executeQuery(
+      'SELECT gpt3_times, gpt4_times, gpt3_vip_end, gpt4_vip_end, balance FROM users WHERE id = ?',
+      [userId],
+    )
+
+    if (!user) {
+      return res.status(404).json({
+        message: '用户不存在',
+      })
+    }
+
+    // 查看邀请人是否是管理员
+    let inviterIsAdminOrAgent = false
+    if (userId) {
+      const [referral] = await executeQuery('SELECT referrer_id FROM referrals WHERE referred_id = ?', [userId])
+      if (referral) {
+        const [referrer] = await executeQuery('SELECT user_type FROM users WHERE id = ?', [referral.referrer_id])
+        if (referrer && (referrer.user_type === 'admin' || referrer.user_type === 'agent'))
+          inviterIsAdminOrAgent = true
+      }
+    }
+
+    // 查询所有套餐信息
+    let packages = await executeQuery('SELECT id, package_name, price, description FROM packages')
+    // 如果邀请人不是管理员，从套餐列表中移除ID为9的特价套餐
+    const [order] = await executeQuery('SELECT user_id FROM orders WHERE user_id = ?', [userId])
+    if (!inviterIsAdminOrAgent || order)
+      packages = packages.filter(packageItem => packageItem.id !== 9)
+
+    // 从数据库查询结果中提取用户信息和套餐信息
+    const data = {
+      userInfo: {
+        gpt3_times: user.gpt3_times,
+        gpt4_times: user.gpt4_times,
+        gpt3_vip_end: user.gpt3_vip_end,
+        gpt4_vip_end: user.gpt4_vip_end,
+        balance: user.balance,
+      },
+      packages,
+    }
+
+    // 发送用户信息和套餐信息
+    res.send({ status: 'Success', message: '', data })
+  }
+  catch (error) {
+    res.status(500).json({
+      message: '服务器错误',
+      error: error.message,
+    })
+  }
+})
+
 function createSign(params, key) {
   // Step 1: Sort the parameters by key
   const sortedParams = Object.keys(params).sort().reduce((result, key) => {
@@ -571,18 +855,53 @@ function createSign(params, key) {
 router.post('/initiate-payment', auth, async (req, res) => {
   const authorizationHeader = req.header('Authorization')
   const token = authorizationHeader.replace('Bearer ', '')
+  const { selectPackage } = req.body
+  console.log(selectPackage)
   const decodedToken = jwt.verify(token, privateKey)
-  const userEmail = decodedToken.email
+  const userId = decodedToken.id
   try {
+    // 获取套餐的价格
+    const [package_detail] = await executeQuery('SELECT price,package_name,id FROM packages WHERE id = ?', [selectPackage])
+    if (!package_detail) {
+      return res.status(404).json({
+        message: '套餐不存在',
+      })
+    }
+    let packagePrice = package_detail.price
+    const packageName = package_detail.package_name
+    const product_number = package_detail.id
+
+    const [user] = await executeQuery('SELECT balance FROM users WHERE id = ?', [userId])
+    let remainingBalance = 0
+    const userBalance = parseFloat(user.balance)
+    if (!isNaN(userBalance) && userBalance >= packagePrice) {
+      await executeQuery('UPDATE users SET balance = balance - ? WHERE id = ?', [packagePrice, userId])
+      await executeQuery('INSERT INTO orders (payment_type, product_name, product_number, amount, status, user_id) VALUES (?, ?, ?, ?, ?, ?)', [
+        'balance',
+        packageName,
+        product_number,
+        packagePrice,
+        'success',
+        userId,
+      ])
+      return res.send({ status: 'Success', message: '支付成功，已从余额扣款', data: null })
+    }
+    else {
+      remainingBalance = user.balance
+      packagePrice -= remainingBalance
+    }
+
     const pid = '20230504230028'
     const key = '63a7PDalwyvJpEZLKRY9lv7z2BYIJruq'
     const apiurl = 'https://7-pay.cn/mapi.php'
     const type = 'wxpay'
-    const notify_url = 'http://www.aiworlds.cc:3002/notify'
+    // const notify_url = 'http://www.aiworlds.cc:3002/notify'
+    const notify_url = 'http://www.easylisting.cn:3002/notify'
+    // easylisting.cn
     const return_url = 'http://www.yourwebsite.com/return'
     const out_trade_no = Date.now().toString()
-    const name = 'Chagpt4-单月会员'
-    const money = '30'
+    const name = packageName
+    const money = packagePrice
     const param = ''
     const params = {
       pid,
@@ -596,14 +915,15 @@ router.post('/initiate-payment', auth, async (req, res) => {
       sign_type: 'MD5', // Add sign_type parameter
     }
 
-    await executeQuery('INSERT INTO orders (order_no, pid, payment_type, product_name, amount, status, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+    await executeQuery('INSERT INTO orders (order_no, pid, payment_type, product_name,product_number, amount, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
       out_trade_no,
       pid,
       type,
       name,
+      product_number,
       money,
       'pending',
-      userEmail,
+      userId,
     ])
 
     const sign = createSign(params, key)
@@ -620,7 +940,7 @@ router.post('/initiate-payment', auth, async (req, res) => {
 
     // handle the response
     if (response.data.code === '1')
-      res.send({ status: 'Success', message: '', data: response.data })
+      res.send({ status: 'Success', message: '', data: { qrcode: response.data.qrcode, packageName, packagePrice } })
 
     else throw new Error(response.data.msg)
   }
@@ -659,36 +979,168 @@ router.get('/notify', async (req, res) => {
         ['paid', out_trade_no],
       )
 
-      // Get the current user's membership end date
+      const [package_detail] = await executeQuery(
+        'SELECT * FROM packages WHERE id = ?',
+        [order.product_number],
+      )
+
+      if (!package_detail) {
+        await executeQuery(
+          'UPDATE orders SET status = ? WHERE order_no = ?',
+          ['failed', out_trade_no],
+        )
+      }
+
       const [user] = await executeQuery(
-        'SELECT membership_end FROM users WHERE email = ?',
-        [order.user_email],
+        'SELECT balance FROM users WHERE id = ?',
+        [order.user_id],
       )
 
-      let membershipEnd
-      // If the user's membership has already expired, add one month from now
-      if (user.membership_end < new Date()) {
-        membershipEnd = new Date()
-        membershipEnd.setMonth(membershipEnd.getMonth() + 1)
+      const needPay = package_detail.price - money // 套餐价格 - 实际支付的
+      if (needPay >= 0) {
+        // 扣除用户的余额
+        if (user.balance >= needPay) {
+          await executeQuery(
+            'UPDATE users SET balance = balance - ? WHERE id = ?',
+            [needPay, order.user_id],
+          )
+        }
+        else {
+          // 扣款异常
+          await executeQuery(
+            'UPDATE orders SET status = ? WHERE order_no = ?',
+            ['用户的余额不足', out_trade_no],
+          )
+          return
+        }
       }
-      // If the user's membership has not expired yet, add one month to the current end date
       else {
-        membershipEnd = new Date(user.membership_end)
-        membershipEnd.setMonth(membershipEnd.getMonth() + 1)
+        // 扣款异常
+        await executeQuery(
+          'UPDATE orders SET status = ? WHERE order_no = ?',
+          ['实际支付超出了需要支付的价格', out_trade_no],
+        )
+        return
       }
 
-      // Update the user's membership end date
-      await executeQuery(
-        'UPDATE users SET membership_end = ? WHERE email = ?',
-        [membershipEnd, order.user_email],
+      // 处理推荐人的充值奖励
+      const referrals = await executeQuery(
+        'SELECT * FROM referrals WHERE referred_id = ?',
+        [order.user_id],
       )
 
-      // 这里可以添加其他逻辑，如给用户发送支付成功的通知等
+      for (const referral of referrals) {
+        const { referrer_id, level } = referral
+        let rewardPercentage = 0
+
+        if (level === '1')
+          rewardPercentage = 0.2
+
+        if (level === '2')
+          rewardPercentage = 0.1
+
+        // 查询推荐人的信息和当前余额
+        const [referrer] = await executeQuery(
+          'SELECT * FROM users WHERE id = ?',
+          [referrer_id],
+        )
+
+        if (referrer) {
+          const rewardAmount = money * rewardPercentage
+          const now = new Date()
+          // 更新推荐的记录
+          await executeQuery(
+            'INSERT INTO referrals_score (time, referrer_id, referred_id, balance, level) VALUES (?, ?, ?, ?, ?)',
+            [now, referrer_id, order.user_id, rewardAmount, level],
+          )
+          // 更新推荐人的余额
+          await executeQuery(
+            'UPDATE users SET balance = balance + ? WHERE id = ?',
+            [rewardAmount, referrer_id],
+          )
+        }
+      }
+
+      if (package_detail.gpt3_times) {
+        // 增加user表中这个用户的GPT-3使用次数
+        await executeQuery(
+          'UPDATE users SET gpt3_times = gpt3_times + ? WHERE id = ?',
+          [package_detail.gpt3_times, order.user_id],
+        )
+      }
+
+      if (package_detail.gpt4_times) {
+        // 增加user表中这个用户的GPT-4使用次数
+        await executeQuery(
+          'UPDATE users SET gpt4_times = gpt4_times + ? WHERE id = ?',
+          [package_detail.gpt4_times, order.user_id],
+        )
+      }
+
+      if (package_detail.gpt3_vip_duration) {
+        // 获取用户的GPT-3 VIP开始和结束日期
+        const [user] = await executeQuery(
+          'SELECT gpt3_vip_start, gpt3_vip_end FROM users WHERE id = ?',
+          [order.user_id],
+        )
+
+        let vip_start, vip_end
+        // 如果用户已经是VIP，就在现有的结束日期上增加新的天数
+        if (user.gpt3_vip_start && user.gpt3_vip_end) {
+          vip_start = new Date(user.gpt3_vip_start)
+          vip_end = new Date(user.gpt3_vip_end)
+          vip_end.setDate(vip_end.getDate() + package_detail.gpt3_vip_duration)
+        }
+        // 如果用户还不是VIP，就从当前日期开始计算
+        else {
+          vip_start = new Date()
+          vip_end = new Date()
+          vip_end.setDate(vip_start.getDate() + package_detail.gpt3_vip_duration)
+        }
+
+        // 更新用户的GPT-3 VIP开始和结束日期
+        await executeQuery(
+          'UPDATE users SET gpt3_vip_start = ?, gpt3_vip_end = ? WHERE id = ?',
+          [vip_start, vip_end, order.user_id],
+        )
+      }
+
+      // 对GPT-4 VIP做同样的处理
+      if (package_detail.gpt4_vip_duration) {
+        // 获取用户的GPT-4 VIP开始和结束日期
+        const [user] = await executeQuery(
+          'SELECT gpt4_vip_start, gpt4_vip_end FROM users WHERE id = ?',
+          [order.user_id],
+        )
+
+        let vip_start, vip_end
+        // 如果用户已经是VIP，就在现有的结束日期上增加新的天数
+        if (user.gpt4_vip_start && user.gpt4_vip_end) {
+          vip_start = new Date(user.gpt4_vip_start)
+          vip_end = new Date(user.gpt4_vip_end)
+          vip_end.setDate(vip_end.getDate() + package_detail.gpt4_vip_duration)
+        }
+        // 如果用户还不是VIP，就从当前日期开始计算
+        else {
+          vip_start = new Date()
+          vip_end = new Date()
+          vip_end.setDate(vip_start.getDate() + package_detail.gpt4_vip_duration)
+        }
+
+        // 更新用户的GPT-4 VIP开始和结束日期
+        await executeQuery(
+          'UPDATE users SET gpt4_vip_start = ?, gpt4_vip_end = ? WHERE id = ?',
+          [vip_start, vip_end, order.user_id],
+        )
+      }
+      res.send('success')
     }
     else {
-      // 如果支付失败，也可以进行相应的操作
+      await executeQuery(
+        'UPDATE orders SET status = ? WHERE order_no = ?',
+        ['failed', out_trade_no],
+      )
     }
-    res.sendStatus(200)
   }
   catch (error) {
     res.status(500).json({
