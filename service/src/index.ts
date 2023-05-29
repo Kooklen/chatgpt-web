@@ -307,10 +307,10 @@ router.post('/register', async (req, res) => {
 
     // 如果有推荐人，处理推荐关系
     if (inviter) {
-      // 奖赏推荐人的10次
+      // 奖赏推荐人的5次
       await executeQuery('UPDATE users SET gpt4_times = gpt4_times + 10 WHERE id = ?', [inviter.id])
       const now = new Date()
-      await executeQuery('INSERT INTO referrals_score (time, referrer_id, referred_id, gpt4_times) VALUES (?, ?, ?, ?)', [now, inviter.id, id, 10])
+      await executeQuery('INSERT INTO referrals_score (time, referrer_id, referred_id, gpt4_times) VALUES (?, ?, ?, ?)', [now, inviter.id, id, 5])
 
       // 将一级推荐关系存入referrals表
       await executeQuery('INSERT INTO referrals (time, referrer_id, referred_id, level) VALUES (?, ?, ?, 1)', [now, inviter.id, id])
@@ -558,7 +558,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
           role: '',
-          text: '很抱歉，您还没有开通 GPT3 的使用权限，请在左侧开通会员',
+          text: '很抱歉，您还没有开通 GPT3 的使用权限，请在左侧开通会员或者邀请更多用户',
         }
 
         res.write(JSON.stringify(customChatMessage))
@@ -585,7 +585,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
           role: '',
-          text: '很抱歉，您还没有开通 GPT4 的使用权限，请在左侧开通会员',
+          text: '很抱歉，您还没有开通 GPT4 的使用权限，请在左侧开通会员或者邀请更多用户',
         }
 
         res.write(JSON.stringify(customChatMessage))
@@ -799,7 +799,7 @@ router.post('/user-packages', auth, async (req, res) => {
     }
 
     // 查询所有套餐信息
-    let packages = await executeQuery('SELECT id, package_name, price, description FROM packages')
+    let packages = await executeQuery('SELECT id, package_name, price, origin_price, description FROM packages')
     // 如果邀请人不是管理员，从套餐列表中移除ID为9的特价套餐
     const [order] = await executeQuery('SELECT user_id FROM orders WHERE user_id = ?', [userId])
     if (!inviterIsAdminOrAgent || order)
@@ -987,7 +987,7 @@ router.get('/notify', async (req, res) => {
       if (!package_detail) {
         await executeQuery(
           'UPDATE orders SET status = ? WHERE order_no = ?',
-          ['failed', out_trade_no],
+          ['找不到订单', out_trade_no],
         )
       }
 

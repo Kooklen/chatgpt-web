@@ -9,7 +9,6 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { PromptStore } from '@/components/common'
 import { fetchPackageInfo, fetchQrCode, fetchUserInfo } from '@/api'
 import { router } from '@/router'
-
 const appStore = useAppStore()
 const chatStore = useChatStore()
 const Nmessage = useMessage()
@@ -82,19 +81,23 @@ const getUserInfo = async () => {
   }
 }
 
-const getPackageInfo = async () => {
-  try {
-    if (secretKey) {
-      const { data } = await fetchPackageInfo(secretKey)
-      // @ts-expect-error
-      packageInfo.value = data.userInfo
-      // @ts-expect-error
-      packages.value = data.packages
-    }
-  }
-  catch (error: any) {
-    console.error(error)
-  }
+const currentTab = ref('accountStatus')
+
+const pollingInterval = 3000 // 轮询间隔，单位为毫秒
+let pollingIntervalId: any
+
+const stopPolling = () => {
+  clearInterval(pollingIntervalId)
+}
+
+let invitePollingInterval: any
+
+const startinvitePolling = () => {
+  invitePollingInterval = setInterval(getUserInfo, pollingInterval)
+}
+
+const stopinvitePolling = () => {
+  clearInterval(invitePollingInterval)
 }
 
 const handleInvite = async () => {
@@ -103,21 +106,10 @@ const handleInvite = async () => {
     return
   }
   getUserInfo()
+  startinvitePolling()
   showModal.value = true
 }
 
-const currentTab = ref('accountStatus')
-
-const pollingInterval = 3000 // 轮询间隔，单位为毫秒
-let pollingIntervalId: any
-
-const startPolling = () => {
-  pollingIntervalId = setInterval(getPackageInfo, pollingInterval)
-}
-
-const stopPolling = () => {
-  clearInterval(pollingIntervalId)
-}
 const isPaying = ref(false)
 const payDetail = ref({
   qrcode: '',
@@ -132,13 +124,22 @@ const getPayQrCode = async () => {
       Nmessage.success(message)
       currentTab.value = 'accountStatus'
       isPaying.value = false
-      startPolling()
       return
     }
     showPayModal.value = true
     // @ts-expect-error
     payDetail.value = data
   }
+}
+
+const selectCardItem = (index: any) => {
+  selectCard.value = index + 1
+  const ele = document.getElementById('page_item')
+  window.scrollTo({
+    top: ele!.offsetTop,
+    behavior: 'smooth',
+  })
+  // ele!.scrollTop = ele!.scrollHeight
 }
 
 const clearQrCode = () => {
@@ -148,11 +149,42 @@ const clearQrCode = () => {
 }
 
 const paySuccess = () => {
-  startPolling()
   payDetail.value.qrcode = ''
   isPaying.value = false
   showPayModal.value = false
   currentTab.value = 'accountStatus'
+  Nmessage.success(
+    '支付成功，请检查账户状态。',
+  )
+}
+
+const getPackageInfo = async () => {
+  try {
+    if (secretKey) {
+      const { data } = await fetchPackageInfo(secretKey)
+      if (
+        packageInfo.value.gpt3_times !== ''
+				&& packageInfo.value.gpt4_times !== ''
+				&& packageInfo.value.gpt3_vip_end !== ''
+				&& packageInfo.value.gpt4_vip_end !== ''
+				&& packageInfo.value.balance !== '0') {
+        // @ts-expect-error
+        if (JSON.stringify(data.userInfo) !== JSON.stringify(packageInfo.value))
+          paySuccess()
+      }
+      // @ts-expect-error
+      packageInfo.value = data.userInfo
+      // @ts-expect-error
+      packages.value = data.packages
+    }
+  }
+  catch (error: any) {
+    console.error(error)
+  }
+}
+
+const startPolling = () => {
+  pollingIntervalId = setInterval(getPackageInfo, pollingInterval)
 }
 
 const handleUpdateGpt4 = async () => {
@@ -226,7 +258,7 @@ watch(
 </script>
 
 <template>
-  <NModal v-model:show="showUpgradeModal" preset="dialog" title="Dialog" class="modal" :on-after-leave="clearQrCode">
+  <NModal id="page_item" v-model:show="showUpgradeModal" preset="dialog" title="Dialog" class="modal" :on-after-leave="clearQrCode">
     <template #header>
       <div>会员状态</div>
     </template>
@@ -240,57 +272,66 @@ watch(
           <div class="package" style="font-size: 14px">
             <NCard
               v-show="calculateRemainingDays(packageInfo.gpt3_vip_end) > 0"
-              class="package_item package_item_focus"
+              class="package_item package_item_focus mb-10"
               size="small"
             >
               <div class="title">
-                GPT3会员剩余天数是：{{ calculateRemainingDays(packageInfo.gpt3_vip_end) }}天
+                <span class="font-bold"> GPT-3.5会员剩余天数是：</span>{{ calculateRemainingDays(packageInfo.gpt3_vip_end) }}天
               </div>
             </NCard>
             <NCard
               v-show="calculateRemainingDays(packageInfo.gpt4_vip_end) > 0"
-              class="package_item package_item_focus"
+              class="package_item package_item_focus mb-10"
               size="small"
             >
               <div class="title">
-                GPT4会员剩余天数是：{{ calculateRemainingDays(packageInfo.gpt4_vip_end) }}天
+                <span class="font-bold">GPT-4会员剩余天数是：</span>{{ calculateRemainingDays(packageInfo.gpt4_vip_end) }}天
               </div>
             </NCard>
             <NCard
-              class="package_item package_item_focus"
+              class="package_item package_item_focus mb-10"
               size="small"
             >
               <div class="title">
-                GPT3剩余使用次数：{{ packageInfo.gpt3_times }}次
+                <span class="font-bold">GPT-3.5剩余使用次数：</span>{{ packageInfo.gpt3_times }}次
               </div>
             </NCard>
             <NCard
-              class="package_item package_item_focus"
+              class="package_item package_item_focus mb-10"
               size="small"
             >
               <div class="title">
-                GPT4剩余使用次数：{{ packageInfo.gpt4_times }}次
+                <span class="font-bold">GPT-4剩余使用次数：</span>{{ packageInfo.gpt4_times }}次
               </div>
             </NCard>
           </div>
         </div>
       </NTabPane>
       <NTabPane name="buyPackage" tab="购买套餐">
-        <div class="package">
-          <div>
-            您的账户余额为{{ (Number(packageInfo.balance) || 0).toFixed(2) }}元
+        <div class="packages">
+          <div class="mb-3">
+            <span class="font-bold">
+              您的账户余额为{{ (Number(packageInfo.balance) || 0).toFixed(2) }}元
+            </span>
             <span style="color: #999;font-size: 12px">(可以抵扣任意套餐)</span>
           </div>
           <NCard
-            v-for="(item, index) in packages" :key="index"
+            v-for="(item, index) in packages"
+            :key="index"
             class="package_item mt-3"
-            size="small" :class="{ package_item_focus: index + 1 === selectCard }" @click="selectCard = index + 1"
+            size="small" :class="{ package_item_focus: index + 1 === selectCard }" @click="selectCardItem(index)"
           >
-            <div class="font-bold title">
+            <div class="discount">
+              优惠{{ item.origin_price - item.price }}元
+            </div>
+            <div class="title">
               {{ item.package_name }}
             </div>
-            <div class="">
+            <div class="font-bold price">
               价格：{{ item.price }}
+            </div>
+            <div class="origin_price">
+              原价：{{ item.origin_price }}
             </div>
             <div class="">
               {{ item.description }}
@@ -305,20 +346,13 @@ watch(
       </NTabPane>
     </NTabs>
   </NModal>
-  <NModal v-model:show="showModal" preset="dialog" title="Dialog" class="modal">
+  <NModal v-model:show="showModal" preset="dialog" title="Dialog" class="modal" :on-after-leave="stopinvitePolling">
     <template #header>
       <div>您的邀请状态</div>
     </template>
     <NTabs type="line" animated>
       <NTabPane name="oasis" tab="邀请一下">
-        <div>
-          您通过邀请已经累积获得 <span style="color: #68bdff">{{ userInfo.invitation_score.gpt4_times || 0 }}</span> 次GPT4使用机会以及<span style="color: #68bdff">{{ userInfo.invitation_score.balance || 0 }}</span>元奖励！
-          <div style="font-size: 12px;color: #666">
-            每邀请一位新用户，您可以立即获得5次使用GPT-4模型的机会同时您可以获得受邀用户每次消费金额的20%可用于消费
-          </div>
-        </div>
-        <div class="mt-5" />
-        <div class="mt-5" @click="copyToClipboard(userInfo.invitation_code)">
+        <div @click="copyToClipboard(userInfo.invitation_code)">
           <NPopover placement="right">
             <template #trigger>
               您的邀请码是：{{ userInfo.invitation_code }}
@@ -335,6 +369,18 @@ watch(
             </template>
             <span>点击可以直接复制！</span>
           </NPopover>
+        </div>
+        <div class="mt-3">
+          您通过邀请已经累积获得
+          <span style="color: #68bdff">{{ userInfo.invitation_score.gpt4_times || 0 }}</span>
+          次GPT4使用机会以及
+          <span style="color: #68bdff">{{ userInfo.invitation_score.balance || 0 }}
+          </span>元奖励！
+          <div class="mt-3" style="font-size: 14px;color: #333">
+            邀请新用户可享多重福利：
+            <br>① 每成功邀请一位新用户注册，将获得<span class="font-bold">5次免费向GPT-4提问</span>的机会。
+            <br>② 可终身享有受邀用户消费金额<span class="font-bold">20%的返利</span>。
+          </div>
         </div>
       </NTabPane>
       <NTabPane name="邀请列表">
@@ -422,7 +468,7 @@ watch(
         </div>
         <div class="p-4 pb-0 mb-2">
           <NButton type="primary" block @click="handleUpdateGpt4">
-						升级会员
+            升级会员
           </NButton>
         </div>
       </main>
@@ -481,20 +527,64 @@ watch(
 	justify-content: space-between;
 	padding: 5px;
 	margin-top: 5px;
-
+	font-size: 18px;
 	.package_item{
-		cursor: pointer;
-		&:hover{
-			border: 1px solid #68bdff;
-		}
-		margin-bottom: 5px;
-		width: 180px;
+		cursor: none;
+		margin-bottom: 10px;
+		width:46%;
 		height: 100px;
 		.title{
 			font-size: 14px;
 		}
+	}
+	.package_item_focus{
+		border: 1px solid #42adff;
+		background-color: rgba(66, 173, 255,.1);
+	}
+}
+
+.packages{
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	padding: 5px;
+	margin-top: 5px;
+	position: relative;
+
+	.discount{
+		text-align: center;
+		color: white;
+		width: 40%;
+		height: 15%;
+		background-color: #42adff;
+		position: absolute;
+		top: -10px;
+		left: -4px;
+		border-radius: 5px;
+		z-index: 1000;
+	}
+	.package_item{
+		cursor: pointer;
+		text-align: center;
 		div{
-			font-size: 12px!important;
+			font-size: 12px;
+		}
+		&:hover{
+			border: 1px solid #68bdff;
+		}
+		.price{
+			font-size: 1.3em;
+			white-space: nowrap;
+		}
+		.origin_price{
+			color: #999;
+			text-decoration: line-through;
+		}
+		margin-bottom: 5px;
+		width:46%;
+		//height: 120px;
+		.title{
+			font-size: 14px;
 		}
 	}
 	.package_item_focus{
@@ -507,37 +597,56 @@ watch(
 	.modal {
 		width: 90vw;
 	}
-	.package {
+
+	.packages{
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: space-between;
-		padding: 5px 0px!important;
+		padding: 5px;
+		margin-top: 5px;
+		position: relative;
 
-		.package_item {
-			font-size: 12px !important;
+		.discount{
+			text-align: center;
+			color: white;
+			width: 40%;
+			height: 15%;
+			background-color: #42adff;
+			position: absolute;
+			top: -10px;
+			left: -4px;
+			border-radius: 5px;
+			z-index: 1000;
+		}
+		.package_item{
 			cursor: pointer;
-
-			&:hover {
+			text-align: center;
+			div{
+				font-size: 12px;
+			}
+			&:hover{
 				border: 1px solid #68bdff;
 			}
-
-			margin-bottom: 5px !important;
-			width: 140px !important;
-			height: 90px !important;
-
-			.title {
-				font-size: 14px;
+			.title{
+				font-size: 12px;
 			}
-
-			div {
-				font-size: 12px !important;
+			.price{
+				font-size: 1em;
+				white-space: nowrap;
 			}
+			.origin_price{
+				color: #999;
+				text-decoration: line-through;
+			}
+			margin-bottom: 5px;
+			width:46%;
+		}
+		.package_item_focus{
+			border: 1px solid #42adff;
+			background-color: rgba(66, 173, 255,.1);
 		}
 	}
-	.package_item_focus{
-		border: 1px solid #42adff;
-		background-color: rgba(66, 173, 255,.1);
-	}
+
 }
 
 @media (min-width: 600px) {

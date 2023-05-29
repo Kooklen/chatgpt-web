@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInst, FormItemInst, FormItemRule, FormRules } from 'naive-ui'
-import { NButton, NForm, NFormItem, NInput, useNotification } from 'naive-ui'
+import { NButton, NForm, NFormItem, NInput, NInputGroup, useNotification } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import axios from '@/utils/request/axios'
 import { debounce } from '@/utils/functions/debounce'
@@ -359,12 +359,23 @@ function handlePasswordInput() {
             <NInput v-model:value="loginForm.phone" size="large" @keydown.enter.prevent />
           </NFormItem>
           <NFormItem v-if="!loginStatus || findPwd" path="phoneCode" label="手机验证码">
-            <NInput
-              v-model:value="loginForm.phoneCode"
-              size="large"
-              max-length="6"
-              @keydown.enter.prevent
-            />
+            <NInputGroup>
+              <NInput
+                v-model:value="loginForm.phoneCode"
+                size="large"
+                max-length="6"
+                @keydown.enter.prevent
+              />
+              <NButton
+                v-if="!loginStatus || findPwd"
+                class="get-code"
+                :disabled="isLoading"
+                style="height: 40px;border-left: none"
+                @click="getPhoneCode"
+              >
+                {{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
+              </NButton>
+            </NInputGroup>
           </NFormItem>
           <NFormItem path="password" label="密码">
             <NInput
@@ -393,15 +404,6 @@ function handlePasswordInput() {
           class="submit" :class="{ 'submit-disabed': isSubmitting }" @click="debouncedHandleLogin"
         >
           登录
-        </NButton>
-
-        <NButton
-          v-if="!loginStatus || findPwd"
-          class="get-code"
-          :disabled="isLoading"
-          @click="getPhoneCode"
-        >
-          {{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
         </NButton>
 
         <NButton
@@ -543,7 +545,7 @@ function handlePasswordInput() {
 		}
 		.get-code{
 			background: linear-gradient(180deg, #FFFFFF 0%, #F6F6F6 100%);
-			margin-bottom: 20px;
+			//margin-bottom: 20px;
 		}
 		.register{
 			margin-top: 22px;

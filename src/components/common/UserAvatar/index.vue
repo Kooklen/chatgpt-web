@@ -10,7 +10,9 @@ const userStore = useUserStore()
 const userInfo = computed(() => userStore.userInfo)
 const handleUpdateShow = () => {
   message.success(
-    '点击 邀请新好友 获得您的专属邀请链接，每邀请一位新的用户，您可以获得10次使用GPT4模型的机会',
+    '点击 邀请新好友 获得您的专属邀请链接'
+		+ '① 每成功邀请一位新用户注册，将获得5次免费向GPT-4提问的机会。\n'
+		+ '② 可终身享有受邀用户消费金额20%的返利。',
     { duration: 10000 },
   )
 }
