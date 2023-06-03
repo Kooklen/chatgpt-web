@@ -357,7 +357,7 @@ watch(
             <template #trigger>
               您的邀请码是：{{ userInfo.invitation_code }}
             </template>
-            <span>点击可以直接复制！</span>
+            <span>点击可以直接复制！【微信请手动复制】</span>
           </NPopover>
         </div>
         <div class="mt-5">
@@ -367,7 +367,7 @@ watch(
                 您的邀请链接是：http://aiworlds.cc/#/login/{{ userInfo.invitation_code }}
               </div>
             </template>
-            <span>点击可以直接复制！</span>
+            <span>点击可以直接复制！【微信请手动复制】</span>
           </NPopover>
         </div>
         <div class="mt-3">
@@ -491,7 +491,7 @@ watch(
 }
 
 .new-btn{
-	color: #438EFF;
+	color: #68bdff;
 	width: 100%;
 	height: 75px;
 	margin-left: 0;

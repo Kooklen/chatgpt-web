@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import axios from '@/utils/request/axios'
 import { debounce } from '@/utils/functions/debounce'
 const notification = useNotification()
+const hasInvitationCode = ref(false)
 const findPwd = ref(false)
 const loginForm = reactive({
   phone: '',
@@ -24,6 +25,7 @@ onMounted(() => {
     // @ts-expect-error
     loginForm.invitationCode = route.params.invitationCode
     loginStatus.value = false
+    hasInvitationCode.value = true
   }
 })
 
@@ -128,49 +130,10 @@ function newInfor() {
     duration: 3000,
   })
   notification.success({
-    content: 'chatgpt4.0模型已经上线, 左侧邀请新用户就可以体验使用！详情请见左侧菜单栏',
+    content: '六一儿童节快乐！AIworlds 1.0上线, 左侧邀请新用户就可以获得体验次数以及更多福利！详情请见左侧菜单栏',
     duration: 10000,
   })
 }
-
-// function getEmailCode() {
-//   const email = loginForm.email
-//   const type = findPwd.value ? 'findPwd' : ''
-//   isLoading.value = true
-//
-//   axios.post('/verify-email', { email, type })
-//     .then((response) => {
-//       if (response.data.status === 'success') {
-//         // 验证码邮件发送成功，显示成功信息
-//         notification.success({
-//           content: response.data.message,
-//           duration: 5000,
-//         })
-//         startCountdown()
-//       }
-//       else {
-//         // 发生错误，显示错误信息
-//         notification.error({
-//           content: response.data.message,
-//           duration: 5000,
-//         })
-//         isLoading.value = false
-//         countdown.value = 60
-//         clearInterval(timerId) // 发生错误，清除计时器
-//       }
-//     })
-//     .catch((error) => {
-//       isLoading.value = false
-//       countdown.value = 60
-//       clearInterval(timerId) // 发生错误，清除计时器
-//
-//       // 发生错误，显示错误信息
-//       notification.error({
-//         content: 'An error occurred while sending the verification email.',
-//         duration: 5000,
-//       })
-//     })
-// }
 
 function getPhoneCode() {
   const phone = loginForm.phone
@@ -358,25 +321,6 @@ function handlePasswordInput() {
           <NFormItem v-else path="phone" label="手机号">
             <NInput v-model:value="loginForm.phone" size="large" @keydown.enter.prevent />
           </NFormItem>
-          <NFormItem v-if="!loginStatus || findPwd" path="phoneCode" label="手机验证码">
-            <NInputGroup>
-              <NInput
-                v-model:value="loginForm.phoneCode"
-                size="large"
-                max-length="6"
-                @keydown.enter.prevent
-              />
-              <NButton
-                v-if="!loginStatus || findPwd"
-                class="get-code"
-                :disabled="isLoading"
-                style="height: 40px;border-left: none"
-                @click="getPhoneCode"
-              >
-                {{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
-              </NButton>
-            </NInputGroup>
-          </NFormItem>
           <NFormItem path="password" label="密码">
             <NInput
               v-model:value="loginForm.password"
@@ -387,11 +331,31 @@ function handlePasswordInput() {
               @keydown.enter.prevent
             />
           </NFormItem>
+					<NFormItem v-if="!loginStatus || findPwd" path="phoneCode" label="手机验证码">
+						<NInputGroup>
+							<NInput
+								v-model:value="loginForm.phoneCode"
+								size="large"
+								max-length="6"
+								@keydown.enter.prevent
+							/>
+							<NButton
+								v-if="!loginStatus || findPwd"
+								class="get-code"
+								:disabled="isLoading"
+								style="height: 40px;border-left: none"
+								@click="getPhoneCode"
+							>
+								{{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
+							</NButton>
+						</NInputGroup>
+					</NFormItem>
           <NFormItem v-if="!loginStatus && !findPwd" path="invitationCode" label="邀请码">
             <NInput
               v-model:value="loginForm.invitationCode"
               placeholder="邀请码（可选）"
               size="large"
+              :disabled="hasInvitationCode"
               @keydown.enter.prevent
             />
           </NFormItem>
@@ -602,7 +566,7 @@ function handlePasswordInput() {
 		width: 70%;
 		margin: 0 auto;
 		margin-top: 80px;
-		height: 200px;
+		height: 180px;
 		.logo-pic{
 			margin: 0 auto;
 			width: 80px;

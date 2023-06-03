@@ -243,12 +243,23 @@ router.post('/reset-password', async (req, res) => {
 
     // 生成一个新的 token 并将其存储到 Redis 中
     const token = jwt.sign({ id }, privateKey, { algorithm: 'HS256' })
-    await client.set(id, token, 'EX', 36000, (err, reply) => {
+    await client.set(id, token, 'EX', 360000, (err, reply) => {
       if (err)
         throw new Error(err)
     })
-    // 设置 cookie，有效期为 10 小时
-    res.cookie('token', token, { maxAge: 3600 * 10000 })
+    // 设置 cookie，有效期为 100 小时
+    res.cookie('token', token, { maxAge: 3600 * 100000 })
+
+    // 保存用户信息到resetPwd表中
+    const lastUsedIP = req.ip
+    const lastUsedIPFrom = await getIpLocation(lastUsedIP) // 使用你选择的IP归属地查询服务
+    const lastUsedTime = new Date()
+
+    await executeQuery(
+      'INSERT INTO resetPwd (user_id, time, lastUsedIP, lastUsedIPFrom) VALUES (?, ?, ?, ?)',
+      [id, lastUsedTime, lastUsedIP, lastUsedIPFrom],
+    )
+
     res.send({ status: 'success', token })
   }
   catch (error) {
@@ -391,13 +402,13 @@ router.post('/login', async (req, res) => {
 
       // 生成一个新的 token 并将其存储到 Redis 中
       const token = jwt.sign({ id: user.id }, privateKey)
-      await client.set(key, token, 'EX', 36000, (err, reply) => {
+      await client.set(key, token, 'EX', 360000, (err, reply) => {
         if (err)
           throw new Error(err)
       })
 
-      // 设置 cookie，有效期为 10 小时
-      res.cookie('token', token, { maxAge: 3600 * 10000 })
+      // 设置 cookie，有效期为 100 小时
+      res.cookie('token', token, { maxAge: 3600 * 100000 })
       res.send({ status: 'success', token })
     })
   }
@@ -656,22 +667,11 @@ router.post('/user-info', auth, async (req, res) => {
       })
     }
 
-    // const invitedUsers = await executeQuery('SELECT referred_id FROM referrals WHERE referrer_id = ?', [userId]) // 推荐者信息
-    // const invitedUserIds = userId
-
-    // Query for invited user's email or phone info
     let invitedUserInfos = []
     if (userId) {
       invitedUserInfos = await executeQuery('SELECT * FROM referrals_score WHERE referrer_id = ?', [userId])
 
       for (let i = 0; i < invitedUserInfos.length; i++) {
-        // let emailOrPhone
-        // // 去user表中使用 invitedUserInfos.referred_id 当 id拿到email/phone
-        // if (invitedUserInfos[i].phone) { emailOrPhone = `${invitedUserInfos[i].phone.slice(0, 3)}****${invitedUserInfos[i].phone.slice(-4)}` }
-        // else if (invitedUserInfos[i].email) {
-        //   const emailParts = invitedUserInfos[i].email.split('@')
-        //   emailOrPhone = `${emailParts[0][0]}***@${emailParts[1]}`
-        // }
         // 查询被邀请人的邮箱或电话信息
         const [invitedUser] = await executeQuery('SELECT email, phone FROM users WHERE id = ?', [invitedUserInfos[i].referred_id])
 
@@ -856,7 +856,6 @@ router.post('/initiate-payment', auth, async (req, res) => {
   const authorizationHeader = req.header('Authorization')
   const token = authorizationHeader.replace('Bearer ', '')
   const { selectPackage } = req.body
-  console.log(selectPackage)
   const decodedToken = jwt.verify(token, privateKey)
   const userId = decodedToken.id
   try {
