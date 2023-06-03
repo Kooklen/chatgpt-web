@@ -2,13 +2,15 @@
 import type { CSSProperties } from 'vue'
 import { computed, ref, watch } from 'vue'
 import { NButton, NCard, NImage, NLayoutSider, NModal, NPopover, NTabPane, NTable, NTabs, NTbody, NTd, NTh, NThead, NTr, useMessage } from 'naive-ui'
+import { TinyEmitter } from 'tiny-emitter'
 import List from './List.vue'
 import Footer from './Footer.vue'
 import { useAppStore, useChatStore } from '@/store'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { PromptStore } from '@/components/common'
-import { fetchPackageInfo, fetchQrCode, fetchUserInfo } from '@/api'
+import { clickBuyBtn, fetchPackageInfo, fetchQrCode, fetchUserInfo } from '@/api'
 import { router } from '@/router'
+const emitter = new TinyEmitter()
 const appStore = useAppStore()
 const chatStore = useChatStore()
 const Nmessage = useMessage()
@@ -154,7 +156,7 @@ const paySuccess = () => {
   showPayModal.value = false
   currentTab.value = 'accountStatus'
   Nmessage.success(
-    '支付成功，请检查账户状态。',
+    '请检查账户状态。',
   )
 }
 
@@ -169,8 +171,8 @@ const getPackageInfo = async () => {
 				&& packageInfo.value.gpt4_vip_end !== ''
 				&& packageInfo.value.balance !== '0') {
         // @ts-expect-error
-        if (JSON.stringify(data.userInfo) !== JSON.stringify(packageInfo.value))
-          paySuccess()
+        if (packageInfo.value && (JSON.stringify(data.userInfo) !== JSON.stringify(packageInfo.value))) {
+        }
       }
       // @ts-expect-error
       packageInfo.value = data.userInfo
@@ -188,6 +190,7 @@ const startPolling = () => {
 }
 
 const handleUpdateGpt4 = async () => {
+  await clickBuyBtn()
   if (!secretKey) {
     router.push('/login')
     return
@@ -196,6 +199,7 @@ const handleUpdateGpt4 = async () => {
   startPolling()
   showUpgradeModal.value = true
 }
+emitter.on('openHandleUpdateGpt4', handleUpdateGpt4)
 
 function formatDate(date: any) {
   const d = new Date(date)
@@ -322,7 +326,7 @@ watch(
             size="small" :class="{ package_item_focus: index + 1 === selectCard }" @click="selectCardItem(index)"
           >
             <div class="discount">
-              优惠{{ item.origin_price - item.price }}元
+              优惠{{ (item.origin_price - item.price).toFixed(2) }}元
             </div>
             <div class="title">
               {{ item.package_name }}

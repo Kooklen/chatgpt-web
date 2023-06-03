@@ -62,6 +62,12 @@ export function fetchQrCode<T>(
   })
 }
 
+export function clickBuyBtn<T>() {
+  return post<T>({
+    url: '/record-click-buy',
+  })
+}
+
 export function fetchSession<T>() {
   return post<T>({
     url: '/session',

@@ -472,12 +472,12 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       const totalSearchesCount = totalSearches.count
 
       const topUsers = await executeQuery(
-        'SELECT user_email, COUNT(*) as search_count FROM search_history GROUP BY user_email ORDER BY search_count DESC LIMIT 3',
+        'SELECT user_id, user_email, COUNT(*) as search_count FROM search_history GROUP BY user_id, user_email ORDER BY search_count DESC LIMIT 10',
       )
 
-      let topUsersMessage = 'Top 3 users with highest search counts:\n'
+      let topUsersMessage = 'Top 10 users with the highest search counts:\n'
       topUsers.forEach((user, index) => {
-        topUsersMessage += `${index + 1}. ${user.user_email} - ${user.search_count} searches\n`
+        topUsersMessage += `${index + 1}. User ID: ${user.user_id}, Email: ${user.user_email} - ${user.search_count} searches\n`
       })
 
       const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nYesterday's new users: ${yesterdayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\nTotal user searches: ${totalSearchesCount}\n ${topUsersMessage}`
@@ -819,6 +819,30 @@ router.post('/user-packages', auth, async (req, res) => {
 
     // 发送用户信息和套餐信息
     res.send({ status: 'Success', message: '', data })
+  }
+  catch (error) {
+    res.status(500).json({
+      message: '服务器错误',
+      error: error.message,
+    })
+  }
+})
+
+router.post('/record-click-buy', auth, async (req, res) => {
+  try {
+    // 从JWT中获取用户ID
+    const authorizationHeader = req.header('Authorization')
+    const token = authorizationHeader.replace('Bearer ', '')
+    const decodedToken = jwt.verify(token, privateKey)
+    const userId = decodedToken.id
+
+    // 记录用户点击购买套餐按钮的时间
+    const clickTime = new Date()
+
+    // 执行插入操作将用户ID和点击时间保存到数据库表中
+    await executeQuery('INSERT INTO click_buy_btn (user_id, click_time) VALUES (?, ?)', [userId, clickTime])
+
+    res.send({ status: 'Success', message: 'Click recorded successfully' })
   }
   catch (error) {
     res.status(500).json({

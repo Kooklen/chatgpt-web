@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import { computed, nextTick } from 'vue'
+import { NButton } from 'naive-ui'
+import { TinyEmitter } from 'tiny-emitter'
 import { HoverButton, SvgIcon } from '@/components/common'
 import { useAppStore, useChatStore } from '@/store'
+import { clickBuyBtn } from '@/api'
 
 interface Props {
   usingContext: boolean
@@ -15,6 +18,7 @@ interface Emit {
 defineProps<Props>()
 
 const emit = defineEmits<Emit>()
+const emitter = new TinyEmitter()
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
@@ -38,6 +42,12 @@ function handleExport() {
 
 function toggleUsingContext() {
   emit('toggleUsingContext')
+}
+
+const handleUpdateGpt4 = async () => {
+  await clickBuyBtn()
+  handleUpdateCollapsed()
+  emitter.emit('openHandleUpdateGpt4')
 }
 </script>
 
@@ -72,6 +82,11 @@ function toggleUsingContext() {
             <SvgIcon icon="ri:download-2-line" />
           </span>
         </HoverButton>
+        <NButton type="primary" style="margin-right: 10px" @click="handleUpdateGpt4">
+          <span>
+            开通会员
+          </span>
+        </NButton>
       </div>
     </div>
   </header>
