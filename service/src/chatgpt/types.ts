@@ -6,4 +6,5 @@ export interface RequestOptions {
   process?: (chat: ChatMessage) => void
   systemMessage?: string
   model?: string
+  type?: string
 }

@@ -23,6 +23,7 @@ export function fetchChatConfig<T = any>() {
 export function fetchChatAPIProcess<T = any>(
   params: {
     model?: string
+    type?: string
     prompt: string
     options?: { conversationId?: string; parentMessageId?: string }
     signal?: GenericAbortSignal
@@ -32,7 +33,7 @@ export function fetchChatAPIProcess<T = any>(
 
   return post<T>({
     url: '/chat-process',
-    data: { prompt: params.prompt, options: params.options, systemMessage: settingStore.systemMessage, model: params.model },
+    data: { prompt: params.prompt, options: params.options, systemMessage: settingStore.systemMessage, model: params.model, type: params.type },
     signal: params.signal,
     onDownloadProgress: params.onDownloadProgress,
   })

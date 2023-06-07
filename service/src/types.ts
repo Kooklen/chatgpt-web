@@ -5,6 +5,7 @@ export interface RequestProps {
   options?: ChatContext
   systemMessage: string
   model?: string
+  type?: string
 }
 
 export interface ChatContext {
@@ -16,7 +17,8 @@ export interface ChatGPTUnofficialProxyAPIOptions {
   accessToken: string
   apiReverseProxyUrl?: string
   model?: string
-  debug?: boolean
+	type?: string
+	debug?: boolean
   headers?: Record<string, string>
   fetch?: FetchFn
 }

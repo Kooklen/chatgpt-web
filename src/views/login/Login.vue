@@ -130,7 +130,11 @@ function newInfor() {
     duration: 3000,
   })
   notification.success({
-    content: '六一儿童节快乐！AIworlds 1.0上线, 左侧邀请新用户就可以获得体验次数以及更多福利！详情请见左侧菜单栏',
+    content: 'AIworlds 1.0上线, 左侧邀请新用户就可以获得体验次数以及更多福利！详情请见左侧菜单栏',
+    duration: 10000,
+  })
+  notification.success({
+    content: '最新联网版本模型可以在右下角切换测试，如有BUG请及时反馈。',
     duration: 10000,
   })
 }
@@ -331,25 +335,25 @@ function handlePasswordInput() {
               @keydown.enter.prevent
             />
           </NFormItem>
-					<NFormItem v-if="!loginStatus || findPwd" path="phoneCode" label="手机验证码">
-						<NInputGroup>
-							<NInput
-								v-model:value="loginForm.phoneCode"
-								size="large"
-								max-length="6"
-								@keydown.enter.prevent
-							/>
-							<NButton
-								v-if="!loginStatus || findPwd"
-								class="get-code"
-								:disabled="isLoading"
-								style="height: 40px;border-left: none"
-								@click="getPhoneCode"
-							>
-								{{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
-							</NButton>
-						</NInputGroup>
-					</NFormItem>
+          <NFormItem v-if="!loginStatus || findPwd" path="phoneCode" label="手机验证码">
+            <NInputGroup>
+              <NInput
+                v-model:value="loginForm.phoneCode"
+                size="large"
+                max-length="6"
+                @keydown.enter.prevent
+              />
+              <NButton
+                v-if="!loginStatus || findPwd"
+                class="get-code"
+                :disabled="isLoading"
+                style="height: 40px;border-left: none"
+                @click="getPhoneCode"
+              >
+                {{ countdown < 60 ? `${countdown}秒后重新获取` : '获取验证码' }}
+              </NButton>
+            </NInputGroup>
+          </NFormItem>
           <NFormItem v-if="!loginStatus && !findPwd" path="invitationCode" label="邀请码">
             <NInput
               v-model:value="loginForm.invitationCode"

@@ -444,7 +444,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   res.setHeader('Content-type', 'application/octet-stream')
 
   try {
-    const { prompt, options = {}, systemMessage, model } = req.body as RequestProps
+    const { prompt, options = {}, systemMessage, model, type } = req.body as RequestProps
     let firstChunk = true
     // 存储用户搜索记录
     const authorizationHeader = req.header('Authorization')
@@ -480,12 +480,35 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
         topUsersMessage += `${index + 1}. User ID: ${user.user_id}, Email: ${user.user_email} - ${user.search_count} searches\n`
       })
 
-      const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nYesterday's new users: ${yesterdayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\nTotal user searches: ${totalSearchesCount}\n ${topUsersMessage}`
+      const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nYesterday's new users: ${yesterdayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\n`
+
+      // 获取今日已付款订单数量和信息
+      const todayPaidOrders = await executeQuery(
+        'SELECT user_id, updated_at, amount FROM orders WHERE status = ? AND DATE(updated_at) = ?',
+        ['paid', today],
+      )
+
+      let ordersMessage = 'Today\'s paid orders:\n'
+      todayPaidOrders.forEach((order, index) => {
+        ordersMessage += `${index + 1}. User ID: ${order.user_id}, Update Time: ${order.updated_at}, Amount: ${order.amount}\n`
+      })
+
+      // 获取总已付款订单数量和信息
+      const totalPaidOrders = await executeQuery(
+        'SELECT user_id, updated_at, amount FROM orders WHERE status = ?',
+        ['paid'],
+      )
+
+      let totalOrdersMessage = '\nTotal paid orders:\n'
+      totalPaidOrders.forEach((order, index) => {
+        totalOrdersMessage += `${index + 1}. User ID: ${order.user_id}, Update Time: ${order.updated_at}, Amount: ${order.amount}\n`
+      })
+
       const customChatMessage: ChatMessage = {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-expect-error
         role: 'analysis',
-        text: statisticsMessage,
+        text: statisticsMessage + ordersMessage + totalOrdersMessage,
       }
 
       res.write(JSON.stringify(customChatMessage))
@@ -636,6 +659,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       },
       systemMessage,
       model: 'gpt-3.5-turbo',
+      type,
       // model, // 暂时屏蔽4.0
     })
   }
@@ -918,8 +942,8 @@ router.post('/initiate-payment', auth, async (req, res) => {
     const key = '63a7PDalwyvJpEZLKRY9lv7z2BYIJruq'
     const apiurl = 'https://7-pay.cn/mapi.php'
     const type = 'wxpay'
-    // const notify_url = 'http://www.aiworlds.cc:3002/notify'
-    const notify_url = 'http://www.easylisting.cn:3002/notify'
+    const notify_url = 'http://www.aiworlds.cc:3002/notify'
+    // const notify_url = 'http://www.easylisting.cn:3002/notify'
     // easylisting.cn
     const return_url = 'http://www.yourwebsite.com/return'
     const out_trade_no = Date.now().toString()
@@ -993,13 +1017,14 @@ router.get('/notify', async (req, res) => {
         message: '订单不存在',
       })
     }
+    const now = new Date()
 
     // 判断支付状态
     if (trade_status === 'TRADE_SUCCESS') {
       // 如果支付成功，更新订单状态
       await executeQuery(
-        'UPDATE orders SET status = ? WHERE order_no = ?',
-        ['paid', out_trade_no],
+        'UPDATE orders SET status = ?, updated_at = ? WHERE order_no = ?',
+        ['paid', now, out_trade_no],
       )
 
       const [package_detail] = await executeQuery(

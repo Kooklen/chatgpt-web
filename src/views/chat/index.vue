@@ -50,6 +50,10 @@ const options = ref([
     value: 'gpt-3.5-turbo',
   },
   {
+    label: '3.5联网',
+    value: 'gpt-3.5-turbo-web',
+  },
+  {
     label: '4.0模型',
     value: 'gpt-4',
   },
@@ -130,7 +134,8 @@ async function onConversation() {
     let lastText = ''
     const fetchChatAPIOnce = async () => {
       await fetchChatAPIProcess<Chat.ConversationResponse>({
-        model: model.value,
+        model: (model.value === 'gpt-3.5-turbo' || 'gpt-3.5-turbo-web') ? 'gpt-3.5-turbo' : model.value,
+        type: model.value === 'gpt-3.5-turbo-web' ? 'web' : '',
         prompt: message,
         options,
         signal: controller.signal,
@@ -266,7 +271,8 @@ async function onRegenerate(index: number) {
     let lastText = ''
     const fetchChatAPIOnce = async () => {
       await fetchChatAPIProcess<Chat.ConversationResponse>({
-        model: model.value,
+        model: (model.value === 'gpt-3.5-turbo' || 'gpt-3.5-turbo-web') ? 'gpt-3.5-turbo' : model.value,
+        type: model.value === 'gpt-3.5-turbo-web' ? 'web' : '',
         prompt: message,
         options,
         signal: controller.signal,

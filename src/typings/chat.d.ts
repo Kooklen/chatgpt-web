@@ -7,7 +7,7 @@ declare namespace Chat {
 		error?: boolean
 		loading?: boolean
 		conversationOptions?: ConversationRequest | null
-		requestOptions: { prompt: string; options?: ConversationRequest | null; model?: string }
+		requestOptions: { prompt: string; options?: ConversationRequest | null; model?: string; type?:string }
 	}
 
 	interface History {
@@ -34,7 +34,6 @@ declare namespace Chat {
 			choices: { finish_reason: string; index: number; logprobs: any; text: string }[]
 			created: number
 			id: string
-			model: string
 			object: string
 			usage: { completion_tokens: number; prompt_tokens: number; total_tokens: number }
 		}
@@ -43,5 +42,6 @@ declare namespace Chat {
 		role: string
 		text: string
 		model:? string
+		type:? string
 	}
 }

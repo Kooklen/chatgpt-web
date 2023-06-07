@@ -64,8 +64,8 @@ class ApiManager {
         options.maxResponseTokens = 8192
       }
       else {
-        options.maxModelTokens = 8192
-        options.maxResponseTokens = 2048
+        options.maxModelTokens = 32768
+        options.maxResponseTokens = 8192
       }
     }
 
@@ -83,8 +83,42 @@ class ApiManager {
 const apiManager = new ApiManager()
 
 async function chatReplyProcess(options: RequestOptions) {
-  const { message, lastContext, process, systemMessage, model } = options
+  let { message, lastContext, process, systemMessage, model, type } = options
   try {
+    if (type === 'web') {
+      // 使用message作为查询进行搜索
+      const query = message
+      let snippet = ''
+      const maxSnippetLength = 100 // 限制每个搜索结果的最大长度
+      try {
+        const searchResponse = await fetch(`https://api-ddg.iii.hair/search?q=${query}&max_results=10`)
+        const searchResults = await searchResponse.json()
+        snippet = searchResults.map(({ title, body, href }) => {
+          const truncatedBody = body.length > maxSnippetLength ? `${body.substring(0, maxSnippetLength)}...` : body
+          return `'${title}' : ${truncatedBody} ;`
+        }).join('\n')
+      }
+      catch (err) {
+        try {
+          const searchResponse = await fetch(`https://ddg-api.herokuapp.com/search?query=${query}&limit=10`)
+          const searchResults = await searchResponse.json()
+          snippet = searchResults.map(({ title, snippet, link }) => {
+            const truncatedSnippet = snippet.length > maxSnippetLength ? `${snippet.substring(0, maxSnippetLength)}...` : snippet
+            return `'${title}' : ${truncatedSnippet} ;`
+          }).join('\n')
+        }
+        catch (err) {
+          return err.status(500).json({
+            message: '服务器错误',
+            error: err.message,
+          })
+        }
+      }
+
+      const instructions = 'Instructions: Reply to me in the language of my request or question above. Give a comprehensive answer to the question or request I have made above. Below are some results from a web search. Use them if necessary.'
+      message += `${instructions}\n${snippet}`
+    }
+
     let options: SendMessageOptions = { timeoutMs }
 
     if (apiModel === 'ChatGPTAPI') {
@@ -117,28 +151,6 @@ async function chatReplyProcess(options: RequestOptions) {
     return sendResponse({ type: 'Fail', message: error.message ?? 'Please check the back-end console' })
   }
 }
-
-// async function fetchBalance() {
-//   const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-//   const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL
-//
-//   if (!isNotEmptyString(OPENAI_API_KEY))
-//     return Promise.resolve('-')
-//
-//   const API_BASE_URL = isNotEmptyString(OPENAI_API_BASE_URL)
-//     ? OPENAI_API_BASE_URL
-//     : 'https://api.openai.com'
-//
-//   try {
-//     const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` }
-//     const response = await axios.get(`${API_BASE_URL}/dashboard/billing/credit_grants`, { headers })
-//     const balance = response.data.total_available ?? 0
-//     return Promise.resolve(balance.toFixed(3))
-//   }
-//   catch {
-//     return Promise.resolve('-')
-//   }
-// }
 
 async function chatConfig() {
   // const balance = await fetchBalance()
