@@ -26,7 +26,7 @@ service.interceptors.response.use(
         window.location.href = '#/login'
         alert('登陆过期,正在跳转回主页')
         // @ts-expect-error
-        return Promise.reject(new Error('Empty data returned'))
+        return Promise.reject(new Error('请先注册或者登录。'))
       }
     }
     return response
@@ -39,7 +39,7 @@ service.interceptors.response.use(
       window.location.href = '#/login'
       alert('登陆过期,正在跳转回主页')
     }
-    return Promise.reject(error)
+    return Promise.reject(new Error('请先注册或者登录。'))
   },
 )
 

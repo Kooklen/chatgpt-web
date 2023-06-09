@@ -592,7 +592,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
           role: '',
-          text: '很抱歉，您还没有开通 GPT3 的使用权限，请在左侧开通会员或者邀请更多用户',
+          text: '抱歉，您的GPT-3使用次数已用完或会员已到期。请在左侧开通会员或邀请更多用户以继续使用。',
         }
 
         res.write(JSON.stringify(customChatMessage))
@@ -619,7 +619,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
           role: '',
-          text: '很抱歉，您还没有开通 GPT4 的使用权限，请在左侧开通会员或者邀请更多用户',
+          text: '抱歉，您的GPT-4使用次数已用完或会员已到期。请在左侧开通会员或邀请更多用户以继续使用。',
         }
 
         res.write(JSON.stringify(customChatMessage))
@@ -631,8 +631,8 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
     if (userId && prompt) {
       const truncatedPrompt = prompt.slice(0, 255)
       await executeQuery(
-        'INSERT INTO search_history (user_id, keyword, model) VALUES (?, ?, ?)',
-        [userId, truncatedPrompt, model],
+        'INSERT INTO search_history (user_id, keyword, model, type) VALUES (?, ?, ?, ?)',
+        [userId, truncatedPrompt, model, type],
       )
 
       // 获取用户IP地址和归属地

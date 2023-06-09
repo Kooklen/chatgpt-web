@@ -58,15 +58,8 @@ class ApiManager {
 
     // increase max token limit if use gpt-4
     if (model.toLowerCase().includes('gpt-4')) {
-      // if use 32k model
-      if (model.toLowerCase().includes('32k')) {
-        options.maxModelTokens = 32768
-        options.maxResponseTokens = 8192
-      }
-      else {
-        options.maxModelTokens = 32768
-        options.maxResponseTokens = 8192
-      }
+      options.maxModelTokens = 32768
+      options.maxResponseTokens = 8192
     }
 
     if (isNotEmptyString(OPENAI_API_BASE_URL))
@@ -89,7 +82,7 @@ async function chatReplyProcess(options: RequestOptions) {
       // 使用message作为查询进行搜索
       const query = message
       let snippet = ''
-      const maxSnippetLength = 100 // 限制每个搜索结果的最大长度
+      const maxSnippetLength = 200 // 限制每个搜索结果的最大长度
       try {
         const searchResponse = await fetch(`https://api-ddg.iii.hair/search?q=${query}&max_results=10`)
         const searchResults = await searchResponse.json()
@@ -116,7 +109,7 @@ async function chatReplyProcess(options: RequestOptions) {
       }
 
       const instructions = 'Instructions: Reply to me in the language of my request or question above. Give a comprehensive answer to the question or request I have made above. Below are some results from a web search. Use them if necessary.'
-      message += `${instructions}\n${snippet}`
+      message = `My question is${message}${instructions}\n${snippet}`
     }
 
     let options: SendMessageOptions = { timeoutMs }
