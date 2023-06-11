@@ -319,7 +319,7 @@ router.post('/register', async (req, res) => {
     // 如果有推荐人，处理推荐关系
     if (inviter) {
       // 奖赏推荐人的5次
-      await executeQuery('UPDATE users SET gpt4_times = gpt4_times + 10 WHERE id = ?', [inviter.id])
+      await executeQuery('UPDATE users SET gpt4_times = gpt4_times + 5 WHERE id = ?', [inviter.id])
       const now = new Date()
       await executeQuery('INSERT INTO referrals_score (time, referrer_id, referred_id, gpt4_times) VALUES (?, ?, ?, ?)', [now, inviter.id, id, 5])
 
@@ -681,7 +681,7 @@ router.post('/user-info', auth, async (req, res) => {
 
     // 查询用户信息
     const [user] = await executeQuery(
-      'SELECT email, invitation_code, membership_end, gpt4_times FROM users WHERE id = ?',
+      'SELECT email, invitation_code, gpt4_times FROM users WHERE id = ?',
       [userId],
     )
 

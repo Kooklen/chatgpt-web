@@ -135,7 +135,7 @@ const getPayQrCode = async () => {
 }
 
 const selectCardItem = (index: any) => {
-  selectCard.value = index + 1
+  selectCard.value = index
   const ele = document.getElementById('page_item')
   window.scrollTo({
     top: ele!.offsetTop,
@@ -323,7 +323,7 @@ watch(
             v-for="(item, index) in packages"
             :key="index"
             class="package_item mt-3"
-            size="small" :class="{ package_item_focus: index + 1 === selectCard }" @click="selectCardItem(index)"
+            size="small" :class="{ package_item_focus: item.id === selectCard }" @click="selectCardItem(item.id)"
           >
             <div class="discount">
               优惠{{ (item.origin_price - item.price).toFixed(2) }}元
@@ -342,8 +342,8 @@ watch(
             </div>
           </NCard>
           <div class="mt-5" style="width: 100%;text-align: center">
-            <NButton :disabled="isPaying" type="primary" block @click="getPayQrCode">
-              立即开通
+            <NButton :disabled="isPaying" type="success" block @click="getPayQrCode">
+              微信支付
             </NButton>
           </div>
         </div>
@@ -412,7 +412,7 @@ watch(
       <div>请尽快支付</div>
     </template>
     <div v-if="payDetail.qrcode" class="text-center">
-      <div>你选购的套餐为<span class="font-bold">{{ payDetail.packageName }}</span>，实际需要支付金额为<span class="font-bold">{{ Number(payDetail.packagePrice).toFixed(2) }}</span>元，请用微信扫码</div>
+      <div>你选购的套餐为<span class="font-bold">{{ payDetail.packageName }}</span>，实际需要支付金额为<span class="font-bold">{{ Number(payDetail.packagePrice).toFixed(2) }}</span>元，请用<span style="color:#07c160">微信扫码</span></div>
       <NImage
         :src="payDetail.qrcode"
         preview-disabled

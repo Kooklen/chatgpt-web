@@ -84,7 +84,7 @@ async function chatReplyProcess(options: RequestOptions) {
       let snippet = ''
       const maxSnippetLength = 200 // 限制每个搜索结果的最大长度
       try {
-        const searchResponse = await fetch(`https://api-ddg.iii.hair/search?q=${query}&max_results=10`)
+        const searchResponse = await fetch(`https://api-ddg.iii.hair/search?q=${query.slice(0, 20)}&max_results=10`)
         const searchResults = await searchResponse.json()
         snippet = searchResults.map(({ title, body, href }) => {
           const truncatedBody = body.length > maxSnippetLength ? `${body.substring(0, maxSnippetLength)}...` : body
