@@ -3,6 +3,7 @@ import type { CSSProperties } from 'vue'
 import { computed, ref, watch } from 'vue'
 import { NButton, NCard, NImage, NLayoutSider, NModal, NPopover, NTabPane, NTable, NTabs, NTbody, NTd, NTh, NThead, NTr, useMessage } from 'naive-ui'
 import { TinyEmitter } from 'tiny-emitter'
+import Clipboard from 'clipboard'
 import List from './List.vue'
 import Footer from './Footer.vue'
 import { useAppStore, useChatStore } from '@/store'
@@ -231,12 +232,8 @@ function calculateRemainingDays(date: any) {
   }
 }
 
-function copyToClipboard(text: any) {
+function copyToClipboard(text: string) {
   if (!navigator.clipboard) {
-    Nmessage.warning(
-      '浏览器不支持复制到您的剪贴板，请手动复制。',
-    )
-    console.error('Clipboard API not available')
     return
   }
 
@@ -246,6 +243,20 @@ function copyToClipboard(text: any) {
     )
   }, (err) => {
     console.error('Could not copy text: ', err)
+    const clipboard = new Clipboard('.copy-button', {
+      text() {
+        return text
+      },
+    })
+
+    clipboard.on('success', (e) => {
+      Nmessage.info('已经成功完整复制到您的剪贴板啦！')
+      e.clearSelection()
+    })
+
+    clipboard.on('error', (e) => {
+      Nmessage.warning('浏览器不支持复制到您的剪贴板，请手动复制。')
+    })
   })
 }
 

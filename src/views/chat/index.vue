@@ -132,9 +132,10 @@ async function onConversation() {
 
   try {
     let lastText = ''
+    console.log(model.value)
     const fetchChatAPIOnce = async () => {
       await fetchChatAPIProcess<Chat.ConversationResponse>({
-        model: (model.value === 'gpt-3.5-turbo' || 'gpt-3.5-turbo-web') ? 'gpt-3.5-turbo' : model.value,
+        model: (model.value === 'gpt-3.5-turbo' || model.value === 'gpt-3.5-turbo-web') ? 'gpt-3.5-turbo' : model.value,
         type: model.value === 'gpt-3.5-turbo-web' ? 'web' : '',
         prompt: message,
         options,
@@ -271,7 +272,7 @@ async function onRegenerate(index: number) {
     let lastText = ''
     const fetchChatAPIOnce = async () => {
       await fetchChatAPIProcess<Chat.ConversationResponse>({
-        model: (model.value === 'gpt-3.5-turbo' || 'gpt-3.5-turbo-web') ? 'gpt-3.5-turbo' : model.value,
+        model: (model.value === 'gpt-3.5-turbo' || model.value === 'gpt-3.5-turbo-web') ? 'gpt-3.5-turbo' : model.value,
         type: model.value === 'gpt-3.5-turbo-web' ? 'web' : '',
         prompt: message,
         options,
