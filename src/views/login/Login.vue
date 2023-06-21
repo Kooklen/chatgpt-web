@@ -126,15 +126,11 @@ function startCountdown() {
 
 function newInfor() {
   notification.success({
-    content: loginStatus.value ? '登录成功' : '注册成功',
+    content: loginStatus.value ? '登录成功' : '注册成功，请及时添加客服微信获取最新信息！',
     duration: 3000,
   })
   notification.success({
-    content: 'AIworlds 1.0上线, 左侧邀请新用户就可以获得体验次数以及更多福利！详情请见左侧菜单栏',
-    duration: 10000,
-  })
-  notification.success({
-    content: '最新联网版本模型可以在右下角切换测试，如有BUG请及时反馈。',
+    content: 'AIworlds1.1更新,本次升级了OPENAI最新模型，支持更长的输入字数，同时联网版本模型再次得到升级，输出结果将更加准确。左侧邀请新用户就可以获得体验次数以及更多福利！详情请见左侧菜单栏',
     duration: 10000,
   })
 }

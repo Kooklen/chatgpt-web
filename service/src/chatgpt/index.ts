@@ -50,6 +50,8 @@ class ApiManager {
     const apiKey = model === 'gpt-4' ? process.env.OPENAI_API_KEY_GPT4 : process.env.OPENAI_API_KEY
     const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL
 
+    model = 'gpt-3.5-turbo-16k'
+
     const options: ChatGPTAPIOptions = {
       apiKey,
       completionParams: { model },
@@ -57,10 +59,11 @@ class ApiManager {
     }
 
     // increase max token limit if use gpt-4
-    if (model.toLowerCase().includes('gpt-4')) {
-      options.maxModelTokens = 32768
-      options.maxResponseTokens = 8192
-    }
+    // if (model.toLowerCase().includes('gpt-4')) {
+    options.maxModelTokens = 32768
+    options.maxResponseTokens = 8192
+    // }
+    console.log(options)
 
     if (isNotEmptyString(OPENAI_API_BASE_URL))
       options.apiBaseUrl = `${OPENAI_API_BASE_URL}/v1`
@@ -82,7 +85,7 @@ async function chatReplyProcess(options: RequestOptions) {
       // 使用message作为查询进行搜索
       const query = message
       let snippet = ''
-      const maxSnippetLength = 200 // 限制每个搜索结果的最大长度
+      const maxSnippetLength = 1000 // 限制每个搜索结果的最大长度
       try {
         const searchResponse = await fetch(`https://api-ddg.iii.hair/search?q=${query.slice(0, 20)}&max_results=10`)
         const searchResults = await searchResponse.json()
