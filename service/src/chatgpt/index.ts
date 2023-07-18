@@ -48,9 +48,9 @@ class ApiManager {
 
   private initializeAPI(model: string): ChatGPTAPI {
     const apiKey = model === 'gpt-4' ? process.env.OPENAI_API_KEY_GPT4 : process.env.OPENAI_API_KEY
-    const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL
+    const OPENAI_API_BASE_URL = model === 'gpt-4' ? process.env.OPENAI_API4_BASE_URL : process.env.OPENAI_API_BASE_URL
 
-    model = 'gpt-3.5-turbo-16k'
+    model = model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo-16k'
 
     const options: ChatGPTAPIOptions = {
       apiKey,
@@ -58,11 +58,12 @@ class ApiManager {
       debug: true,
     }
 
-    // increase max token limit if use gpt-4
-    // if (model.toLowerCase().includes('gpt-4')) {
     options.maxModelTokens = 32768
     options.maxResponseTokens = 8192
-    // }
+    if (model.toLowerCase().includes('gpt-4')) {
+      options.maxModelTokens = 32768
+      options.maxResponseTokens = 8000
+    }
     console.log(options)
 
     if (isNotEmptyString(OPENAI_API_BASE_URL))

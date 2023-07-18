@@ -472,12 +472,12 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       const totalSearchesCount = totalSearches.count
 
       const topUsers = await executeQuery(
-        'SELECT user_id, user_email, COUNT(*) as search_count FROM search_history GROUP BY user_id, user_email ORDER BY search_count DESC LIMIT 10',
+        'SELECT user_id, COUNT(*) as search_count FROM search_history GROUP BY user_id ORDER BY search_count DESC LIMIT 10',
       )
 
       let topUsersMessage = 'Top 10 users with the highest search counts:\n'
       topUsers.forEach((user, index) => {
-        topUsersMessage += `${index + 1}. User ID: ${user.user_id}, Email: ${user.user_email} - ${user.search_count} searches\n`
+        topUsersMessage += `${index + 1}. User ID: ${user.user_id}, ${user.search_count} searches\n`
       })
 
       const statisticsMessage = `Today's new users: ${todayNewUsersCount}\nYesterday's new users: ${yesterdayNewUsersCount}\nTotal users: ${totalUsersCount}\nToday's user searches: ${todaySearchesCount}\n`
@@ -658,9 +658,9 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
         firstChunk = false
       },
       systemMessage,
-      model: 'gpt-3.5-turbo',
+      // model: 'gpt-3.5-turbo',
       type,
-      // model, // 暂时屏蔽4.0
+      model, // 暂时屏蔽4.0
     })
   }
   catch (error) {
@@ -942,10 +942,10 @@ router.post('/initiate-payment', auth, async (req, res) => {
     const key = '63a7PDalwyvJpEZLKRY9lv7z2BYIJruq'
     const apiurl = 'https://7-pay.cn/mapi.php'
     const type = 'wxpay'
-    const notify_url = 'https://www.aiworlds.cc:3002/notify'
+		const notify_url = 'https://www.aiworlds.cc:3002/notify'
     // const notify_url = 'http://www.easylisting.cn:3002/notify'
     // easylisting.cn
-    const return_url = 'https://www.aiworlds.cc'
+		const return_url = 'https://www.aiworlds.cc'
     const out_trade_no = Date.now().toString()
     const name = packageName
     const money = packagePrice
