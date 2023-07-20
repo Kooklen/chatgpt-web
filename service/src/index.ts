@@ -937,12 +937,11 @@ router.post('/initiate-payment', auth, async (req, res) => {
       remainingBalance = user.balance
       packagePrice -= remainingBalance
     }
-
-    const pid = '20230504230028'
+··    const pid = '20230504230028'
     const key = '63a7PDalwyvJpEZLKRY9lv7z2BYIJruq'
     const apiurl = 'https://7-pay.cn/mapi.php'
     const type = 'wxpay'
-    const notify_url = 'https://www.aiworlds.cc:3002/notify'
+·    const notify_url = 'https://www.aiworlds.cc:3002/notify'
     // const notify_url = 'http://www.easylisting.cn:3002/notify'
     // easylisting.cn
     const return_url = 'https://www.aiworlds.cc'
