@@ -942,10 +942,10 @@ router.post('/initiate-payment', auth, async (req, res) => {
     const key = '63a7PDalwyvJpEZLKRY9lv7z2BYIJruq'
     const apiurl = 'https://7-pay.cn/mapi.php'
     const type = 'wxpay'
-		const notify_url = 'https://www.aiworlds.cc:3002/notify'
+    const notify_url = 'https://www.aiworlds.cc:3002/notify'
     // const notify_url = 'http://www.easylisting.cn:3002/notify'
     // easylisting.cn
-		const return_url = 'https://www.aiworlds.cc'
+    const return_url = 'https://www.aiworlds.cc'
     const out_trade_no = Date.now().toString()
     const name = packageName
     const money = packagePrice
@@ -1045,12 +1045,13 @@ router.get('/notify', async (req, res) => {
       )
 
       const needPay = package_detail.price - money // 套餐价格 - 实际支付的
-      if (needPay >= 0) {
+      const needPayFixed = Number(needPay.toFixed(2)) // 保留两位小数
+      if (needPayFixed >= 0) {
         // 扣除用户的余额
-        if (user.balance >= needPay) {
+        if (user.balance >= needPayFixed) {
           await executeQuery(
             'UPDATE users SET balance = balance - ? WHERE id = ?',
-            [needPay, order.user_id],
+            [needPayFixed, order.user_id],
           )
         }
         else {
@@ -1125,57 +1126,70 @@ router.get('/notify', async (req, res) => {
         )
       }
 
+      // For GPT-3 VIP
       if (package_detail.gpt3_vip_duration) {
-        // 获取用户的GPT-3 VIP开始和结束日期
         const [user] = await executeQuery(
           'SELECT gpt3_vip_start, gpt3_vip_end FROM users WHERE id = ?',
           [order.user_id],
         )
 
         let vip_start, vip_end
-        // 如果用户已经是VIP，就在现有的结束日期上增加新的天数
+
         if (user.gpt3_vip_start && user.gpt3_vip_end) {
           vip_start = new Date(user.gpt3_vip_start)
           vip_end = new Date(user.gpt3_vip_end)
-          vip_end.setDate(vip_end.getDate() + package_detail.gpt3_vip_duration)
+
+          // Check if the VIP subscription has not expired before updating
+          if (vip_end > new Date()) {
+            vip_end.setDate(vip_end.getDate() + package_detail.gpt3_vip_duration)
+          }
+          else {
+            vip_start = new Date()
+            vip_end = new Date()
+            vip_end.setDate(vip_start.getDate() + package_detail.gpt3_vip_duration)
+          }
         }
-        // 如果用户还不是VIP，就从当前日期开始计算
         else {
           vip_start = new Date()
           vip_end = new Date()
           vip_end.setDate(vip_start.getDate() + package_detail.gpt3_vip_duration)
         }
 
-        // 更新用户的GPT-3 VIP开始和结束日期
         await executeQuery(
           'UPDATE users SET gpt3_vip_start = ?, gpt3_vip_end = ? WHERE id = ?',
           [vip_start, vip_end, order.user_id],
         )
       }
 
-      // 对GPT-4 VIP做同样的处理
+      // For GPT-4 VIP
       if (package_detail.gpt4_vip_duration) {
-        // 获取用户的GPT-4 VIP开始和结束日期
         const [user] = await executeQuery(
           'SELECT gpt4_vip_start, gpt4_vip_end FROM users WHERE id = ?',
           [order.user_id],
         )
 
         let vip_start, vip_end
-        // 如果用户已经是VIP，就在现有的结束日期上增加新的天数
+
         if (user.gpt4_vip_start && user.gpt4_vip_end) {
           vip_start = new Date(user.gpt4_vip_start)
           vip_end = new Date(user.gpt4_vip_end)
-          vip_end.setDate(vip_end.getDate() + package_detail.gpt4_vip_duration)
+
+          // Check if the VIP subscription has not expired before updating
+          if (vip_end > new Date()) {
+            vip_end.setDate(vip_end.getDate() + package_detail.gpt4_vip_duration)
+          }
+          else {
+            vip_start = new Date()
+            vip_end = new Date()
+            vip_end.setDate(vip_start.getDate() + package_detail.gpt4_vip_duration)
+          }
         }
-        // 如果用户还不是VIP，就从当前日期开始计算
         else {
           vip_start = new Date()
           vip_end = new Date()
           vip_end.setDate(vip_start.getDate() + package_detail.gpt4_vip_duration)
         }
 
-        // 更新用户的GPT-4 VIP开始和结束日期
         await executeQuery(
           'UPDATE users SET gpt4_vip_start = ?, gpt4_vip_end = ? WHERE id = ?',
           [vip_start, vip_end, order.user_id],
