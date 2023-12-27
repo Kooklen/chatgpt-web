@@ -48,9 +48,9 @@ class ApiManager {
 
   private initializeAPI(model: string): ChatGPTAPI {
     const apiKey = model === 'gpt-4' ? process.env.OPENAI_API_KEY_GPT4 : process.env.OPENAI_API_KEY
-    const OPENAI_API_BASE_URL = model === 'gpt-4' ? process.env.OPENAI_API4_BASE_URL : process.env.OPENAI_API_BASE_URL
-
-    model = model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo-16k'
+    // const OPENAI_API_BASE_URL = model === 'gpt-4' ? process.env.OPENAI_API4_BASE_URL : process.env.OPENAI_API_BASE_URL
+    const OPENAI_API_BASE_URL = model === 'gpt-4' ? process.env.OPENAI_API_BASE_URL : process.env.OPENAI_API_BASE_URL
+    model = model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo'
 
     const options: ChatGPTAPIOptions = {
       apiKey,
